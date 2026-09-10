@@ -13,11 +13,11 @@ pub enum ExitReason {
 
 impl ExitReason {
     pub fn from_wait_status(status: WaitStatus) -> ExitReason {
-        return match status {
+        match status {
             WaitStatus::Exited(_, return_value) => ExitReason::Normal(return_value),
             WaitStatus::Signaled(_, signal, _) => ExitReason::Signaled(signal as i32),
             WaitStatus::Stopped(_, signal) => ExitReason::Stopped(signal as i32),
             _ => panic!("Unknown WaitStatus: {:?}", status),
-        };
+        }
     }
 }

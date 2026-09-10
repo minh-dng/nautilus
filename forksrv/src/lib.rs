@@ -80,7 +80,7 @@ impl ForkServer {
 
         match unsafe { fork() }.expect("couldn't fork") {
             // Parent returns
-            ForkResult::Parent { child: _, .. } => {
+            ForkResult::Parent { .. } => {
                 unistd::close(ctl_out).expect("coulnd't close ctl_out");
                 unistd::close(st_in).expect("coulnd't close st_out");
                 let mut st_out = BufReader::new(TimeoutReader::new(
@@ -90,12 +90,12 @@ impl ForkServer {
                 st_out
                     .read_u32::<LittleEndian>()
                     .expect("couldn't read child hello");
-                return Self {
-                    inp_file: inp_file,
+                Self {
+                    inp_file,
                     ctl_in: File::from(ctl_in),
-                    shared_data: shared_data,
+                    shared_data,
                     st_out,
-                };
+                }
             }
             //Child does complex stuff
             ForkResult::Child => {
@@ -200,14 +200,14 @@ impl ForkServer {
             .context(QemuRunIOSnafu {
                 task: "couldn't read timeout exitcode",
             })?;
-        return Ok(ExitReason::Timeouted);
+        Ok(ExitReason::Timeouted)
     }
 
     pub fn get_shared_mut(&mut self) -> &mut [u8] {
-        unsafe { return &mut *self.shared_data }
+        unsafe { &mut *self.shared_data }
     }
     pub fn get_shared(&self) -> &[u8] {
-        unsafe { return &*self.shared_data }
+        unsafe { &*self.shared_data }
     }
 
     fn create_shm(bitmap_size: usize) -> (i32, *mut [u8]) {
@@ -228,14 +228,18 @@ impl ForkServer {
                 );
             }
 
-            let res = shmctl(shm_id, IPC_RMID, 0 as *mut nix::libc::shmid_ds);
+            let res = shmctl(
+                shm_id,
+                IPC_RMID,
+                std::ptr::null_mut::<nix::libc::shmid_ds>(),
+            );
             if res < 0 {
                 panic!(
                     "shmclt {:?}",
                     CString::from_raw(strerror(*__errno_location()))
                 );
             }
-            return (shm_id, trace_bits as *mut [u8; 1 << 16]);
+            (shm_id, trace_bits as *mut [u8; 1 << 16])
         }
     }
 }

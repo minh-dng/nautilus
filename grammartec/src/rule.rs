@@ -25,17 +25,17 @@ fn show_bytes(bs: &[u8]) -> String {
         let part: Vec<u8> = escape_default(b).collect();
         visible.push_str(str::from_utf8(&part).unwrap());
     }
-    return format!("\"{}\"", visible);
+    format!("\"{}\"", visible)
 }
 
 impl RuleChild {
     pub fn from_lit(lit: &[u8]) -> Self {
-        return RuleChild::Term(lit.into());
+        RuleChild::Term(lit.into())
     }
 
     pub fn from_nt(nt: &str, ctx: &mut Context) -> Self {
         let (nonterm, _) = RuleChild::split_nt_description(nt);
-        return RuleChild::NTerm(ctx.aquire_nt_id(&nonterm));
+        RuleChild::NTerm(ctx.aquire_nt_id(&nonterm))
     }
 
     fn split_nt_description(nonterm: &str) -> (String, String) {
@@ -46,14 +46,14 @@ impl RuleChild {
         });
 
         //splits {A:a} or {A} into A and maybe a
-        let descr = splitter.captures(nonterm).expect(&format!("could not interpret Nonterminal {:?}. Nonterminal Descriptions need to match start with a capital letter and con only contain [a-zA-Z_-0-9]",nonterm));
+        let descr = splitter.captures(nonterm).unwrap_or_else(|| panic!("could not interpret Nonterminal {:?}. Nonterminal Descriptions need to match start with a capital letter and con only contain [a-zA-Z_-0-9]",nonterm));
         //let name = descr.get(2).map(|m| m.as_str().into()).unwrap_or(default.to_string()));
-        return (descr[1].into(), "".into());
+        (descr[1].into(), "".into())
     }
 
     fn debug_show(&self, ctx: &Context) -> String {
         match self {
-            RuleChild::Term(d) => show_bytes(&d),
+            RuleChild::Term(d) => show_bytes(d),
             RuleChild::NTerm(nt) => ctx.nt_id_to_s(*nt),
         }
     }
@@ -67,14 +67,14 @@ pub enum RuleIDOrCustom {
 impl RuleIDOrCustom {
     pub fn id(&self) -> RuleID {
         match self {
-            RuleIDOrCustom::Rule(id) => return *id,
-            RuleIDOrCustom::Custom(id, _) => return *id,
+            RuleIDOrCustom::Rule(id) => *id,
+            RuleIDOrCustom::Custom(id, _) => *id,
         }
     }
 
     pub fn data(&self) -> &[u8] {
         match self {
-            RuleIDOrCustom::Custom(_, data) => return data,
+            RuleIDOrCustom::Custom(_, data) => data,
             RuleIDOrCustom::Rule(_) => panic!("cannot get data on a normal rule"),
         }
     }
@@ -95,7 +95,7 @@ pub struct RegExpRule {
 
 impl RegExpRule {
     pub fn debug_show(&self, ctx: &Context) -> String {
-        return format!("{} => {:?}", ctx.nt_id_to_s(self.nonterm), self.hir);
+        format!("{} => {:?}", ctx.nt_id_to_s(self.nonterm), self.hir)
     }
 }
 
@@ -114,7 +114,7 @@ impl ScriptRule {
             .map(|nt| ctx.nt_id_to_s(*nt))
             .collect::<Vec<_>>()
             .join(", ");
-        return format!("{} => func({})", ctx.nt_id_to_s(self.nonterm), args);
+        format!("{} => func({})", ctx.nt_id_to_s(self.nonterm), args)
     }
 }
 
@@ -133,17 +133,17 @@ impl PlainRule {
             .map(|child| child.debug_show(ctx))
             .collect::<Vec<_>>()
             .join(", ");
-        return format!("{} => {}", ctx.nt_id_to_s(self.nonterm), args);
+        format!("{} => {}", ctx.nt_id_to_s(self.nonterm), args)
     }
 }
 
 impl Clone for ScriptRule {
     fn clone(&self) -> Self {
-        return Python::attach(|py| ScriptRule {
-            nonterm: self.nonterm.clone(),
+        Python::attach(|py| ScriptRule {
+            nonterm: self.nonterm,
             nonterms: self.nonterms.clone(),
             script: self.script.clone_ref(py),
-        });
+        })
     }
 }
 
@@ -154,11 +154,11 @@ impl Rule {
         nterms: Vec<String>,
         script: Py<PyAny>,
     ) -> Self {
-        return Self::Script(ScriptRule {
+        Self::Script(ScriptRule {
             nonterm: ctx.aquire_nt_id(nonterm),
             nonterms: nterms.iter().map(|s| ctx.aquire_nt_id(s)).collect(),
             script,
-        });
+        })
     }
 
     pub fn from_regex(ctx: &mut Context, nonterm: &str, regex: &str) -> Self {
@@ -169,10 +169,10 @@ impl Rule {
             .parse(regex)
             .unwrap();
 
-        return Self::RegExp(RegExpRule {
+        Self::RegExp(RegExpRule {
             nonterm: ctx.aquire_nt_id(nonterm),
             hir,
-        });
+        })
     }
 
     pub fn debug_show(&self, ctx: &Context) -> String {
@@ -195,21 +195,21 @@ impl Rule {
                 }
             })
             .collect();
-        return Self::Plain(PlainRule {
+        Self::Plain(PlainRule {
             nonterm: ctx.aquire_nt_id(nonterm),
             children,
             nonterms,
-        });
+        })
     }
 
-    pub fn from_term(ntermid: NTermID, term: &Vec<u8>) -> Self {
+    pub fn from_term(ntermid: NTermID, term: &[u8]) -> Self {
         let children = vec![RuleChild::Term(term.to_vec())];
         let nonterms = vec![];
-        return Self::Plain(PlainRule {
+        Self::Plain(PlainRule {
             nonterm: ntermid,
             children,
             nonterms,
-        });
+        })
     }
 
     fn unescape(bytes: &[u8]) -> Vec<u8> {
@@ -235,7 +235,7 @@ impl Rule {
         if i < bytes.len() {
             res.push(bytes[bytes.len() - 1]);
         }
-        return res;
+        res
     }
 
     fn tokenize(format: &[u8], ctx: &mut Context) -> Vec<RuleChild> {
@@ -247,13 +247,13 @@ impl Rule {
                 .expect("RAND_994455541")
         }); //RegExp Changed from (\{[^}\\]+\})|((?:[^{\\]|\\\{|\\\}|\\\\)+) because of problems with \\ (\\ was not matched and therefore thrown away)
 
-        return tokenizer
+        tokenizer
             .captures_iter(format)
             .map(|cap| {
                 if let Some(sub) = cap.get(1) {
                     //println!("cap.get(1): {}", sub.as_str());
                     RuleChild::from_nt(
-                        std::str::from_utf8(&sub.as_bytes())
+                        std::str::from_utf8(sub.as_bytes())
                             .expect("nonterminals need to be valid strings"),
                         ctx,
                     )
@@ -263,27 +263,27 @@ impl Rule {
                     unreachable!()
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
     }
 
     pub fn nonterms(&self) -> &[NTermID] {
-        return match self {
+        match self {
             Rule::Script(r) => &r.nonterms,
             Rule::Plain(r) => &r.nonterms,
             Rule::RegExp(_) => &[],
-        };
+        }
     }
 
     pub fn number_of_nonterms(&self) -> usize {
-        return self.nonterms().len();
+        self.nonterms().len()
     }
 
     pub fn nonterm(&self) -> NTermID {
-        return match self {
+        match self {
             Rule::Script(r) => r.nonterm,
             Rule::Plain(r) => r.nonterm,
             Rule::RegExp(r) => r.nonterm,
-        };
+        }
     }
 
     pub fn generate(&self, tree: &mut Tree, ctx: &Context, len: usize) -> usize {
@@ -309,7 +309,7 @@ impl Rule {
             let mut cur_child_max_len;
             let mut new_nterms = Vec::new();
             new_nterms.extend_from_slice(&self.nonterms()[i..]);
-            if new_nterms.len() != 0 {
+            if !new_nterms.is_empty() {
                 cur_child_max_len = ctx.get_random_len(remaining_len, &new_nterms);
             } else {
                 cur_child_max_len = remaining_len;
@@ -356,6 +356,6 @@ impl Rule {
             total_size += consumed_len;
         }
         //println!("Rule: {}, Size: {}", ctx.nt_id_to_s(self.nonterm.clone()), total_size);
-        return total_size;
+        total_size
     }
 }

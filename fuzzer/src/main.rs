@@ -44,31 +44,6 @@ struct Args {
     cmdline: Vec<String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_overrides_and_target_command() {
-        let args = Args::try_parse_from([
-            "fuzzer",
-            "-g",
-            "grammar.py",
-            "-o",
-            "/tmp/workdir",
-            "--",
-            "./target",
-            "@@",
-        ])
-        .unwrap();
-
-        assert_eq!(args.config, "config.ron");
-        assert_eq!(args.grammar.as_deref(), Some("grammar.py"));
-        assert_eq!(args.workdir.as_deref(), Some("/tmp/workdir"));
-        assert_eq!(args.cmdline, ["./target", "@@"]);
-    }
-}
-
 fn process_input(
     state: &mut FuzzingState,
     inp: &mut QueueItem,
@@ -105,7 +80,7 @@ fn process_input(
             state.havoc_recursion(inp)?;
         }
     }
-    return Ok(());
+    Ok(())
 }
 
 fn fuzzing_thread(
@@ -122,8 +97,8 @@ fn fuzzing_thread(
         args,
         global_state.clone(),
         config.path_to_workdir.clone(),
-        config.timeout_in_millis.clone(),
-        config.bitmap_size.clone(),
+        config.timeout_in_millis,
+        config.bitmap_size,
     )
     .expect("RAND_3617502350");
     let mut state = FuzzingState::new(fuzzer, config.clone(), cks.clone());
@@ -142,8 +117,8 @@ fn fuzzing_thread(
                     args,
                     global_state.clone(),
                     config.path_to_workdir.clone(),
-                    config.timeout_in_millis.clone(),
-                    config.bitmap_size.clone(),
+                    config.timeout_in_millis,
+                    config.bitmap_size,
                 )
                 .expect("RAND_3077320530");
                 state = FuzzingState::new(fuzzer, config.clone(), cks.clone());
@@ -166,8 +141,8 @@ fn fuzzing_thread(
                         args,
                         global_state.clone(),
                         config.path_to_workdir.clone(),
-                        config.timeout_in_millis.clone(),
-                        config.bitmap_size.clone(),
+                        config.timeout_in_millis,
+                        config.bitmap_size,
                     )
                     .expect("RAND_357619639");
                     state = FuzzingState::new(fuzzer, config.clone(), cks.clone());
@@ -479,4 +454,29 @@ fn main() {
         t.expect("RAND_2698731594").join().expect("RAND_2698731594");
     }
     status_thread.join().expect("RAND_399292929");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_overrides_and_target_command() {
+        let args = Args::try_parse_from([
+            "fuzzer",
+            "-g",
+            "grammar.py",
+            "-o",
+            "/tmp/workdir",
+            "--",
+            "./target",
+            "@@",
+        ])
+        .unwrap();
+
+        assert_eq!(args.config, "config.ron");
+        assert_eq!(args.grammar.as_deref(), Some("grammar.py"));
+        assert_eq!(args.workdir.as_deref(), Some("/tmp/workdir"));
+        assert_eq!(args.cmdline, ["./target", "@@"]);
+    }
 }

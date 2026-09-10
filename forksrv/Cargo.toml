@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["coco <coco@hexgolems.com>", "daniel daniel.teuchert@rub.de"]
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 nix = { version = "0.31", features = ["fs", "process", "signal"] }
 libc = "0.2"

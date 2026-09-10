@@ -10,6 +10,8 @@ use crate::context::Context;
 use crate::newtypes::{NTermID, NodeID};
 use crate::tree::Tree;
 
+type RecursionData = (HashMap<NodeID, NodeID>, Vec<NodeID>, Vec<usize>);
+
 pub struct RecursionInfo {
     recursive_parents: HashMap<NodeID, NodeID>,
     sampler: WeightedIndex<f64>,
@@ -30,14 +32,14 @@ impl fmt::Debug for RecursionInfo {
 impl RecursionInfo {
     pub fn new(t: &Tree, n: NTermID, ctx: &Context) -> Option<Self> {
         let (recursive_parents, node_by_offset, depth_by_offset) =
-            RecursionInfo::find_parents(&t, n, ctx)?;
+            RecursionInfo::find_parents(t, n, ctx)?;
         let sampler = RecursionInfo::build_sampler(&depth_by_offset);
-        return Some(Self {
+        Some(Self {
             recursive_parents,
             sampler,
             node_by_offset,
             depth_by_offset,
-        });
+        })
     }
 
     // constructs a tree where each node points to the first ancestor with the same nonterminal (e.g. each node points the next node above it, were the pair forms a recursive occurance of a nonterminal).
@@ -48,11 +50,7 @@ impl RecursionInfo {
     // differnt recursions. Therefore we use the weight of the node to sample the endpoint of a path trough the
     // recursion tree. Then we just sample the length of this path uniformly as (1.. weight). This
     // yields a uniform sample from the whole set of recursions inside the tree. If you read this, Good luck you are on your own.
-    fn find_parents(
-        t: &Tree,
-        nt: NTermID,
-        ctx: &Context,
-    ) -> Option<(HashMap<NodeID, NodeID>, Vec<NodeID>, Vec<usize>)> {
+    fn find_parents(t: &Tree, nt: NTermID, ctx: &Context) -> Option<RecursionData> {
         let mut stack = vec![(None, 0)];
         let mut res = None;
         for (i, rule) in t.rules.iter().enumerate() {
@@ -73,18 +71,18 @@ impl RecursionInfo {
                 stack.push((maybe_parent, depth + 1));
             }
         }
-        return res;
+        res
     }
 
-    fn build_sampler(depths: &Vec<usize>) -> WeightedIndex<f64> {
+    fn build_sampler(depths: &[usize]) -> WeightedIndex<f64> {
         let weights = depths.iter().map(|x| *x as f64).collect::<Vec<_>>();
         assert!(weights.iter().sum::<f64>() > 0.0);
-        return WeightedIndex::new(weights).expect("RAND_1769941938");
+        WeightedIndex::new(weights).expect("RAND_1769941938")
     }
 
     pub fn get_random_recursion_pair(&mut self) -> (NodeID, NodeID) {
         let offset = self.sampler.sample(&mut rand::rng());
-        return self.get_recursion_pair_by_offset(offset);
+        self.get_recursion_pair_by_offset(offset)
     }
 
     pub fn get_recursion_pair_by_offset(&self, offset: usize) -> (NodeID, NodeID) {
@@ -93,10 +91,10 @@ impl RecursionInfo {
         for _ in 0..(self.depth_by_offset[offset]) {
             node2 = self.recursive_parents[&node1];
         }
-        return (node2, node1);
+        (node2, node1)
     }
 
     pub fn get_number_of_recursions(&self) -> usize {
-        return self.node_by_offset.len();
+        self.node_by_offset.len()
     }
 }

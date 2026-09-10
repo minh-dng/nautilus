@@ -21,20 +21,20 @@ impl RuleID {
 
 impl From<usize> for RuleID {
     fn from(i: usize) -> Self {
-        return RuleID(i);
+        RuleID(i)
     }
 }
 
-impl Into<usize> for RuleID {
-    fn into(self) -> usize {
-        return self.0;
+impl From<RuleID> for usize {
+    fn from(val: RuleID) -> Self {
+        val.0
     }
 }
 
 impl Add<usize> for RuleID {
     type Output = RuleID;
     fn add(self, rhs: usize) -> RuleID {
-        return RuleID(self.0 + rhs);
+        RuleID(self.0 + rhs)
     }
 }
 
@@ -46,20 +46,20 @@ impl NodeID {
 
 impl From<usize> for NodeID {
     fn from(i: usize) -> Self {
-        return NodeID(i);
+        NodeID(i)
     }
 }
 
-impl Into<usize> for NodeID {
-    fn into(self) -> usize {
-        return self.0;
+impl From<NodeID> for usize {
+    fn from(val: NodeID) -> Self {
+        val.0
     }
 }
 
 impl Add<usize> for NodeID {
     type Output = NodeID;
     fn add(self, rhs: usize) -> NodeID {
-        return NodeID(self.0 + rhs);
+        NodeID(self.0 + rhs)
     }
 }
 
@@ -88,20 +88,20 @@ impl NTermID {
 
 impl From<usize> for NTermID {
     fn from(i: usize) -> Self {
-        return NTermID(i);
+        NTermID(i)
     }
 }
 
-impl Into<usize> for NTermID {
-    fn into(self) -> usize {
-        return self.0;
+impl From<NTermID> for usize {
+    fn from(val: NTermID) -> Self {
+        val.0
     }
 }
 
 impl Add<usize> for NTermID {
     type Output = NTermID;
     fn add(self, rhs: usize) -> NTermID {
-        return NTermID(self.0 + rhs);
+        NTermID(self.0 + rhs)
     }
 }
 

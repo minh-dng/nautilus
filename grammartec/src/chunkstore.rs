@@ -21,10 +21,10 @@ pub struct ChunkStoreWrapper {
 }
 impl ChunkStoreWrapper {
     pub fn new(work_dir: String) -> Self {
-        return ChunkStoreWrapper {
+        ChunkStoreWrapper {
             chunkstore: RwLock::new(ChunkStore::new(work_dir)),
             is_locked: AtomicBool::new(false),
-        };
+        }
     }
 }
 
@@ -39,13 +39,13 @@ pub struct ChunkStore {
 
 impl ChunkStore {
     pub fn new(work_dir: String) -> Self {
-        return ChunkStore {
+        ChunkStore {
             nts_to_chunks: HashMap::new(),
             seen_outputs: HashSet::new(),
             trees: vec![],
-            work_dir: work_dir,
+            work_dir,
             number_of_chunks: 0,
-        };
+        }
     }
 
     pub fn add_tree(&mut self, tree: Tree, ctx: &Context) {
@@ -53,7 +53,7 @@ impl ChunkStore {
         let id = self.trees.len();
         let mut contains_new_chunk = false;
         for i in 0..tree.size() {
-            buffer.truncate(0);
+            buffer.clear();
             if tree.sizes[i] > 30 {
                 continue;
             }
@@ -63,7 +63,7 @@ impl ChunkStore {
                 self.seen_outputs.insert(buffer.clone());
                 self.nts_to_chunks
                     .entry(tree.get_rule(n, ctx).nonterm())
-                    .or_insert_with(|| vec![])
+                    .or_default()
                     .push((id, n));
                 let mut file = File::create(format!(
                     "{}/outputs/chunks/chunk_{:09}",
@@ -94,11 +94,11 @@ impl ChunkStore {
         });
         //The unwrap_or is just a quick and dirty fix to catch Errors from the sampler
         let selected = relevant.and_then(|iter| iter.choose(&mut rand::rng()));
-        return selected.map(|&(tid, nid)| (&self.trees[tid], nid));
+        selected.map(|&(tid, nid)| (&self.trees[tid], nid))
     }
 
     pub fn trees(&self) -> usize {
-        return self.trees.len();
+        self.trees.len()
     }
 }
 
