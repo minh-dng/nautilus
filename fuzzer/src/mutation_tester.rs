@@ -1,10 +1,6 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-extern crate grammartec;
-extern crate ron;
-extern crate serde_json;
-
 use grammartec::chunkstore::ChunkStore;
 use grammartec::context::Context;
 use grammartec::mutator::Mutator;
@@ -23,7 +19,9 @@ enum MutationMethods {
 fn main() {
     //Parse parameters
     if env::args().len() != 5 {
-        println!("Usage: generator tree_size path_to_serialized_tree path_to_grammar mutation_method(havoc, rec, splice)");
+        println!(
+            "Usage: generator tree_size path_to_serialized_tree path_to_grammar mutation_method(havoc, rec, splice)"
+        );
     } else {
         let tree_depth = env::args()
             .nth(1)

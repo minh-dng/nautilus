@@ -1,19 +1,19 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-use rand::{thread_rng};
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
-use std::sync::atomic::AtomicBool;
 use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
 
-use context::Context;
-use newtypes::{NTermID, NodeID, RuleID};
-use rule::RuleIDOrCustom;
-use tree::{Tree, TreeLike};
+use crate::context::Context;
+use crate::newtypes::{NTermID, NodeID, RuleID};
+use crate::rule::RuleIDOrCustom;
+use crate::tree::{Tree, TreeLike};
+use serde::{Deserialize, Serialize};
 
 pub struct ChunkStoreWrapper {
     pub chunkstore: RwLock<ChunkStore>,
@@ -71,7 +71,7 @@ impl ChunkStore {
                 ))
                 .expect("RAND_596689790");
                 self.number_of_chunks += 1;
-                file.write(&buffer).expect("RAND_606896756");
+                file.write_all(&buffer).expect("RAND_606896756");
                 contains_new_chunk = true;
             }
         }
@@ -80,7 +80,11 @@ impl ChunkStore {
         }
     }
 
-    pub fn get_alternative_to<'a>(&'a self, r: RuleID, ctx: &Context) -> Option<(&Tree, NodeID)> {
+    pub fn get_alternative_to<'a>(
+        &'a self,
+        r: RuleID,
+        ctx: &Context,
+    ) -> Option<(&'a Tree, NodeID)> {
         let chunks = self
             .nts_to_chunks
             .get(&ctx.get_nt(&RuleIDOrCustom::Rule(r)));
@@ -89,9 +93,7 @@ impl ChunkStore {
                 .filter(move |&&(tid, nid)| self.trees[tid].get_rule_id(nid) != r)
         });
         //The unwrap_or is just a quick and dirty fix to catch Errors from the sampler
-        let selected = relevant.and_then(|iter| {
-            iter.choose(&mut thread_rng())
-        });
+        let selected = relevant.and_then(|iter| iter.choose(&mut rand::rng()));
         return selected.map(|&(tid, nid)| (&self.trees[tid], nid));
     }
 
@@ -102,10 +104,10 @@ impl ChunkStore {
 
 #[cfg(test)]
 mod tests {
-    use chunkstore::ChunkStore;
-    use context::Context;
+    use crate::chunkstore::ChunkStore;
+    use crate::context::Context;
+    use crate::tree::TreeLike;
     use std::fs;
-    use tree::TreeLike;
 
     #[test]
     fn chunk_store() {

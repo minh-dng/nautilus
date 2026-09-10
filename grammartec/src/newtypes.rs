@@ -1,6 +1,7 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
+use serde::{Deserialize, Serialize};
 use std::ops::Add;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, Serialize, Deserialize)]
@@ -106,9 +107,9 @@ impl Add<usize> for NTermID {
 
 #[cfg(test)]
 mod tests {
-    use newtypes::NTermID;
-    use newtypes::NodeID;
-    use newtypes::RuleID;
+    use crate::newtypes::NTermID;
+    use crate::newtypes::NodeID;
+    use crate::newtypes::RuleID;
 
     #[test]
     fn rule_id() {
@@ -117,7 +118,8 @@ mod tests {
         let i1: usize = r1.into();
         assert_eq!(i1, 1337);
         let i2: usize = 1338;
-        assert_eq!(i2, r2.into());
+        let i3: usize = r2.into();
+        assert_eq!(i2, i3);
         let r3 = r2 + 3;
         assert_eq!(r3, 1341.into());
     }
@@ -129,7 +131,8 @@ mod tests {
         let i1: usize = r1.into();
         assert_eq!(i1, 1337);
         let i2: usize = 1338;
-        assert_eq!(i2, r2.into());
+        let i3: usize = r2.into();
+        assert_eq!(i2, i3);
         let r3 = r2 + 3;
         assert_eq!(r3, 1341.into());
     }
@@ -141,7 +144,8 @@ mod tests {
         let i1: usize = r1.into();
         assert_eq!(i1, 1337);
         let i2: usize = 1338;
-        assert_eq!(i2, r2.into());
+        let i3: usize = r2.into();
+        assert_eq!(i2, i3);
         let r3 = r2 + 3;
         assert_eq!(r3, 1341.into());
     }
@@ -152,7 +156,8 @@ mod tests {
         let r1: NodeID = x.into();
         let r2 = NodeID::from(y);
         let mut sum_from_nodes = 0;
-        for node in r1..r2 {
+        for i in r1.to_i()..r2.to_i() {
+            let node = NodeID::from(i);
             sum_from_nodes += node.to_i();
         }
         let mut sum_from_ints = 0;

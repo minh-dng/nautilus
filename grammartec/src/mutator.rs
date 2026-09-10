@@ -1,21 +1,18 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-extern crate rand;
-
 use rand::Rng;
-use rand::seq::SliceRandom;
+use rand::seq::IndexedMutRandom;
 
 use std::collections::HashSet;
-use std::mem;
 
-use chunkstore::ChunkStore;
-use context::Context;
+use crate::chunkstore::ChunkStore;
+use crate::context::Context;
+use crate::newtypes::NodeID;
+use crate::recursion_info::RecursionInfo;
+use crate::rule::RuleIDOrCustom;
+use crate::tree::{Tree, TreeLike, TreeMutation};
 use forksrv::newtypes::SubprocessError;
-use newtypes::NodeID;
-use recursion_info::RecursionInfo;
-use rule::RuleIDOrCustom;
-use tree::{Tree, TreeLike, TreeMutation};
 
 pub struct Mutator {
     scratchpad: Tree,
@@ -57,7 +54,7 @@ impl Mutator {
                     bits,
                     tester,
                 )? {
-                    mem::replace(tree, t);
+                    *tree = t;
                 }
             }
             i += 1;
@@ -88,7 +85,7 @@ impl Mutator {
                 if let Some(t) =
                     Mutator::test_and_convert(tree, parent, tree, n, ctx, bits, tester)?
                 {
-                    mem::replace(tree, t);
+                    *tree = t;
                     i = parent.into();
                 }
             }
@@ -143,7 +140,7 @@ impl Mutator {
     where
         F: FnMut(&TreeMutation, &Context) -> Result<(), SubprocessError>,
     {
-        let n = NodeID::from(rand::thread_rng().gen_range(0, tree.size()));
+        let n = NodeID::from(rand::rng().random_range(0..tree.size()));
         let old_rule_id = tree.get_rule_id(n);
         if let Some((repl_tree, repl_node)) = cks.get_alternative_to(old_rule_id, ctx) {
             let repl = tree.mutate_replace_from_tree(n, repl_tree, repl_node);
@@ -183,7 +180,7 @@ impl Mutator {
     where
         F: FnMut(&TreeMutation, &Context) -> Result<(), SubprocessError>,
     {
-        let n = NodeID::from(rand::thread_rng().gen_range(0, tree.size()));
+        let n = NodeID::from(rand::rng().random_range(0..tree.size()));
         let nterm = tree.get_rule(n, ctx).nonterm();
         if ctx.check_if_nterm_has_multiple_possiblities(&nterm) {
             let len = ctx.get_random_len_for_nt(&nterm);
@@ -204,8 +201,8 @@ impl Mutator {
     where
         F: FnMut(&TreeMutation, &Context) -> Result<(), SubprocessError>,
     {
-        let max_len_of_recursions = 2 << rand::thread_rng().gen_range(1, 11);
-        if let Some(recursion_info) = recursions.choose_mut(&mut rand::thread_rng()) {
+        let max_len_of_recursions = 2 << rand::rng().random_range(1..11);
+        if let Some(recursion_info) = recursions.choose_mut(&mut rand::rng()) {
             let recursion = recursion_info.get_random_recursion_pair();
             let recursion_len_pre = recursion.1.to_i() - recursion.0.to_i();
             let recursion_len_total =
@@ -300,14 +297,14 @@ impl Mutator {
 
 #[cfg(test)]
 mod tests {
-    use chunkstore::ChunkStore;
-    use context::Context;
-    use mutator::Mutator;
-    use newtypes::{NodeID, RuleID};
-    use rule::RuleIDOrCustom;
+    use crate::chunkstore::ChunkStore;
+    use crate::context::Context;
+    use crate::mutator::Mutator;
+    use crate::newtypes::{NodeID, RuleID};
+    use crate::rule::RuleIDOrCustom;
+    use crate::tree::{Tree, TreeLike, TreeMutation};
     use std::collections::HashSet;
     use std::str;
-    use tree::{Tree, TreeLike, TreeMutation};
 
     #[test]
     fn check_mut_random_recursion() {

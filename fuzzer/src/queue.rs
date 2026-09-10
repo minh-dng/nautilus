@@ -12,6 +12,7 @@ use grammartec::context::Context;
 use grammartec::recursion_info::RecursionInfo;
 use grammartec::tree::Tree;
 use grammartec::tree::TreeLike;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Clone, Deserialize)]
 pub enum InputState {
@@ -110,7 +111,7 @@ impl Queue {
         ));
 
         //Increase current_id
-        if self.current_id == usize::max_value() {
+        if self.current_id == usize::MAX {
             self.current_id = 0;
         } else {
             self.current_id += 1;

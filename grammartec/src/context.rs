@@ -3,14 +3,13 @@
 
 use std::collections::HashMap;
 
-
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rand::seq::IteratorRandom;
 
-use newtypes::{NTermID, RuleID};
-use pyo3::prelude::PyObject;
-use rule::{Rule, RuleIDOrCustom};
-use tree::Tree;
+use crate::newtypes::{NTermID, RuleID};
+use crate::rule::{Rule, RuleIDOrCustom};
+use crate::tree::Tree;
+use pyo3::{Py, PyAny};
 
 #[derive(Clone)]
 pub struct Context {
@@ -75,7 +74,7 @@ impl Context {
         return rid;
     }
 
-    pub fn add_script(&mut self, nt: &str, nts: Vec<String>, script: PyObject) -> RuleID {
+    pub fn add_script(&mut self, nt: &str, nts: Vec<String>, script: Py<PyAny>) -> RuleID {
         let rid = self.rules.len().into();
         let rule = Rule::from_script(self, nt, nts, script);
         let ntid = self.aquire_nt_id(nt);
@@ -234,7 +233,7 @@ impl Context {
         let mut res = total_remaining_len;
         let iters = (number_of_children as i32) - 1;
         for _ in 0..iters {
-            let proposal = thread_rng().gen_range(0, total_remaining_len + 1);
+            let proposal = rand::rng().random_range(0..total_remaining_len + 1);
             if proposal < res {
                 res = proposal
             }
@@ -261,24 +260,30 @@ impl Context {
             .take_while(move |r| self.rules_to_min_size[r] <= max_len)
             .filter(move |r| {
                 self.rules_to_num_options[r] > 1
-                    || (thread_rng().gen::<usize>() % 100) <= p_include_short_rules
+                    || (rand::rng().random::<u64>() as usize % 100) <= p_include_short_rules
             });
     }
 
     fn dumb_get_random_rule_for_nt(&self, nt: NTermID, max_len: usize) -> RuleID {
         let p_include_short_rules = if self.nts_to_num_options[&nt] < 10 {
-            100 * 0
+            0
         } else if max_len > 100 {
-            2 * 0
+            0
         } else if max_len > 20 {
-            50 * 0
+            0
         } else {
-            100 * 0
+            0
         };
 
-        if let Some(opt) = self.get_applicable_rules(max_len, nt, p_include_short_rules).choose(&mut thread_rng())  {
+        if let Some(opt) = self
+            .get_applicable_rules(max_len, nt, p_include_short_rules)
+            .choose(&mut rand::rng())
+        {
             *opt
-        } else if let Some(opt) = self.get_applicable_rules(max_len, nt, 100).choose(&mut thread_rng()) {
+        } else if let Some(opt) = self
+            .get_applicable_rules(max_len, nt, 100)
+            .choose(&mut rand::rng())
+        {
             *opt
         } else {
             panic!(
@@ -313,9 +318,9 @@ impl Context {
 
 #[cfg(test)]
 mod tests {
-    use context::Context;
-    use rule::{Rule, RuleChild, RuleIDOrCustom};
-    use tree::{Tree, TreeLike};
+    use crate::context::Context;
+    use crate::rule::{Rule, RuleChild, RuleIDOrCustom};
+    use crate::tree::{Tree, TreeLike};
 
     #[test]
     fn simple_context() {
