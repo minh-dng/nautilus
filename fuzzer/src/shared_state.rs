@@ -4,6 +4,7 @@
 use crate::queue::Queue;
 use std::collections::HashMap;
 
+#[expect(dead_code, reason = "Counters retained for fuzzer status reporting")]
 pub struct GlobalSharedState {
     pub queue: Queue,
     //false for not crashing input. True for crashing inputs
@@ -39,7 +40,7 @@ impl GlobalSharedState {
         let mut bitmaps = HashMap::new();
         bitmaps.insert(false, vec![0; bitmap_size]);
         bitmaps.insert(true, vec![0; bitmap_size]);
-        return GlobalSharedState {
+        GlobalSharedState {
             queue,
             bitmaps,
             execution_count: 0,
@@ -64,6 +65,6 @@ impl GlobalSharedState {
             state_saved: String::from("State not saved yet."),
             total_found_asan: 0,
             total_found_sig: 0,
-        };
+        }
     }
 }

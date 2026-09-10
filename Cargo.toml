@@ -5,6 +5,13 @@ members = [
   "forksrv",
   "grammartec",
   "fuzzer",
+  "regex_mutator",
 ]
 
 default-members = ["fuzzer"]
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace.lints.rust]
+dead_code = "allow"

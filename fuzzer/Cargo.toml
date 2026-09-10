@@ -5,6 +5,9 @@ authors = ["coco <coco@hexgolems.com>"]
 default-run = "fuzzer"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 grammartec = {path = "../grammartec"}
 forksrv =  {path = "../forksrv"}

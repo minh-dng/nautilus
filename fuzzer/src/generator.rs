@@ -34,22 +34,6 @@ struct Args {
     verbose: bool,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_required_arguments_and_defaults() {
-        let args = Args::try_parse_from(["generator", "-g", "grammar.py", "-t", "100"]).unwrap();
-
-        assert_eq!(args.grammar_path, "grammar.py");
-        assert_eq!(args.tree_depth, 100);
-        assert_eq!(args.number_of_trees, 1);
-        assert!(!args.store);
-        assert!(!args.verbose);
-    }
-}
-
 fn main() {
     //Parse parameters
     let args = Args::parse();
@@ -96,7 +80,7 @@ fn main() {
         }
         if store {
             let mut output =
-                File::create(&format!("corpus/{}", i + 1)).expect("cannot create output file");
+                File::create(format!("corpus/{}", i + 1)).expect("cannot create output file");
             generated_tree.unparse_to(&ctx, &mut output);
         } else {
             let stdout = io::stdout();
@@ -112,5 +96,21 @@ fn main() {
                     .as_bytes(),
             )
             .expect("Writing to tree file failed");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_required_arguments_and_defaults() {
+        let args = Args::try_parse_from(["generator", "-g", "grammar.py", "-t", "100"]).unwrap();
+
+        assert_eq!(args.grammar_path, "grammar.py");
+        assert_eq!(args.tree_depth, 100);
+        assert_eq!(args.number_of_trees, 1);
+        assert!(!args.store);
+        assert!(!args.verbose);
     }
 }

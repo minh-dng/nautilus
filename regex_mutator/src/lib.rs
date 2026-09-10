@@ -12,11 +12,11 @@ pub struct RomuPrng {
 
 impl RomuPrng {
     pub fn new(xstate: u64, ystate: u64) -> Self {
-        return Self { xstate, ystate };
+        Self { xstate, ystate }
     }
 
     pub fn range(&mut self, min: usize, max: usize) -> usize {
-        return ((self.next_u64() as usize) % (max - min)) + min;
+        ((self.next_u64() as usize) % (max - min)) + min
     }
 
     pub fn new_from_u64(seed: u64) -> Self {
@@ -24,7 +24,7 @@ impl RomuPrng {
         for _ in 0..4 {
             res.next_u64();
         }
-        return res;
+        res
     }
 
     pub fn next_u32(&mut self) -> u32 {
@@ -36,7 +36,7 @@ impl RomuPrng {
         self.xstate = 15241094284759029579u64.wrapping_mul(self.ystate);
         self.ystate = self.ystate.wrapping_sub(xp);
         self.ystate = self.ystate.rotate_left(27);
-        return xp;
+        xp
     }
 }
 
@@ -49,7 +49,7 @@ impl RegexScript {
     pub fn new(seed: u64) -> Self {
         let mut rng = RomuPrng::new_from_u64(seed);
 
-        let len = if rng.next_u64() % 256 == 0 {
+        let len = if rng.next_u64().is_multiple_of(256) {
             rng.next_u64() % 0xffff
         } else {
             let len = 1 << (rng.next_u64() % 8);
@@ -65,11 +65,11 @@ impl RegexScript {
         if self.remaining == 0 {
             return 0;
         }
-        return (self.rng.next_u32() as usize) % val;
+        (self.rng.next_u32() as usize) % val
     }
 
     pub fn get_range(&mut self, min: usize, max: usize) -> usize {
-        return self.get_mod(max - min) + min;
+        self.get_mod(max - min) + min
     }
 }
 
@@ -115,7 +115,7 @@ fn append_class(res: &mut Vec<u8>, scr: &mut RegexScript, cls: &Class) {
 
 fn get_length(scr: &mut RegexScript) -> usize {
     let bits = scr.get_mod(8);
-    return scr.get_mod(2 << bits);
+    scr.get_mod(2 << bits)
 }
 
 fn get_repetitions(rep: &Repetition, scr: &mut RegexScript) -> usize {
@@ -131,7 +131,7 @@ pub fn generate(hir: &Hir, seed: u64) -> Vec<u8> {
     let mut scr = RegexScript::new(seed);
     let mut stack = vec![hir];
     let mut res = vec![];
-    while stack.len() > 0 {
+    while !stack.is_empty() {
         match stack.pop().unwrap().kind() {
             Empty => {}
             Literal(lit) => append_lit(&mut res, lit),
@@ -148,7 +148,7 @@ pub fn generate(hir: &Hir, seed: u64) -> Vec<u8> {
             Alternation(hirs) => stack.push(&hirs[scr.get_mod(hirs.len())]),
         }
     }
-    return res;
+    res
 }
 
 #[cfg(test)]

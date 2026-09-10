@@ -20,9 +20,9 @@ pub struct Mutator {
 
 impl Mutator {
     pub fn new(ctx: &Context) -> Self {
-        return Mutator {
+        Mutator {
             scratchpad: Tree::from_rule_vec(vec![], ctx),
-        };
+        }
     }
 
     //Return value indicates if minimization is complete: true: complete, false: not complete
@@ -44,7 +44,7 @@ impl Mutator {
             let nt = tree.get_rule(n, ctx).nonterm();
             if tree.subtree_size(n) > ctx.get_min_len_for_nt(nt) {
                 self.scratchpad
-                    .generate_from_nt(nt, ctx.get_min_len_for_nt(nt), &ctx);
+                    .generate_from_nt(nt, ctx.get_min_len_for_nt(nt), ctx);
                 if let Some(t) = Mutator::test_and_convert(
                     tree,
                     n,
@@ -62,7 +62,7 @@ impl Mutator {
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     //Return value indicates if minimization is complete: true: complete, false: not complete
@@ -81,20 +81,19 @@ impl Mutator {
         let mut i = start_index;
         while i < tree.size() {
             let n = NodeID::from(i);
-            if let Some(parent) = Mutator::find_parent_with_nt(tree, n, ctx) {
-                if let Some(t) =
+            if let Some(parent) = Mutator::find_parent_with_nt(tree, n, ctx)
+                && let Some(t) =
                     Mutator::test_and_convert(tree, parent, tree, n, ctx, bits, tester)?
-                {
-                    *tree = t;
-                    i = parent.into();
-                }
+            {
+                *tree = t;
+                i = parent.into();
             }
             i += 1;
             if i == end_index {
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     pub fn mut_rules<F>(
@@ -127,7 +126,7 @@ impl Mutator {
                 }
             }
         }
-        return Ok(false);
+        Ok(false)
     }
 
     pub fn mut_splice<F>(
@@ -146,7 +145,7 @@ impl Mutator {
             let repl = tree.mutate_replace_from_tree(n, repl_tree, repl_node);
             tester(&repl, ctx)?;
         }
-        return Ok(());
+        Ok(())
     }
 
     //pub fn rec_splice<F>(
@@ -188,13 +187,13 @@ impl Mutator {
             let repl = tree.mutate_replace_from_tree(n, &self.scratchpad, NodeID::from(0));
             tester(&repl, ctx)?;
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn mut_random_recursion<F>(
         &mut self,
         tree: &Tree,
-        recursions: &mut Vec<RecursionInfo>,
+        recursions: &mut [RecursionInfo],
         ctx: &Context,
         tester: &mut F,
     ) -> Result<(), SubprocessError>
@@ -236,10 +235,13 @@ impl Mutator {
             }
 
             //Adjust the sizes
-            for i in 0..num_of_recursions * recursion_len_pre {
-                if sizes_new[i] >= recursion_len_pre {
-                    sizes_new[i] +=
-                        (num_of_recursions - i / recursion_len_pre - 1) * recursion_len_total;
+            for (i, size) in sizes_new
+                .iter_mut()
+                .take(num_of_recursions * recursion_len_pre)
+                .enumerate()
+            {
+                if *size >= recursion_len_pre {
+                    *size += (num_of_recursions - i / recursion_len_pre - 1) * recursion_len_total;
                 }
             }
 
@@ -261,7 +263,7 @@ impl Mutator {
 
             tester(&repl, ctx)?;
         }
-        return Ok(());
+        Ok(())
     }
 
     fn find_parent_with_nt(tree: &Tree, mut node: NodeID, ctx: &Context) -> Option<NodeID> {
@@ -272,7 +274,7 @@ impl Mutator {
             }
             node = parent;
         }
-        return None;
+        None
     }
 
     fn test_and_convert<F>(
@@ -288,10 +290,10 @@ impl Mutator {
         F: FnMut(&TreeMutation, &HashSet<usize>, &Context) -> Result<bool, SubprocessError>,
     {
         let repl = tree_a.mutate_replace_from_tree(n_a, tree_b, n_b);
-        if tester(&repl, &fresh_bits, ctx)? {
+        if tester(&repl, fresh_bits, ctx)? {
             return Ok(Some(repl.to_tree(ctx)));
         }
-        return Ok(None);
+        Ok(None)
     }
 }
 
@@ -300,7 +302,7 @@ mod tests {
     use crate::chunkstore::ChunkStore;
     use crate::context::Context;
     use crate::mutator::Mutator;
-    use crate::newtypes::{NodeID, RuleID};
+    use crate::newtypes::RuleID;
     use crate::rule::RuleIDOrCustom;
     use crate::tree::{Tree, TreeLike, TreeMutation};
     use std::collections::HashSet;
@@ -321,11 +323,11 @@ mod tests {
         ctx.add_rule("N1", b"r4");
         ctx.add_rule("N4", b"r5");
 
-        let rules = vec![r1, r2, r3, r4, r5]
+        let rules = [r1, r2, r3, r4, r5]
             .iter()
             .map(|x| RuleIDOrCustom::Rule(*x))
             .collect::<Vec<_>>();
-        let mut tree = Tree::from_rule_vec(rules, &ctx);
+        let tree = Tree::from_rule_vec(rules, &ctx);
 
         println!("tree: {:?}", tree);
         let mut mutator = Mutator::new(&ctx);
@@ -357,12 +359,12 @@ mod tests {
                         .collect::<Vec<_>>()[..]
             );
             assert_eq!(tree_mut.repl.last(), Some(&RuleIDOrCustom::Rule(r5)));
-            return Ok(());
+            Ok(())
         };
         let mut recursions = tree.calc_recursions(&ctx).expect("RAND_3407743327");
         println!("Recursions:\n{:?}", recursions);
         mutator
-            .mut_random_recursion(&mut tree, &mut recursions, &ctx, &mut tester)
+            .mut_random_recursion(&tree, &mut recursions, &ctx, &mut tester)
             .expect("RAND_4227583404");
     }
 
@@ -381,7 +383,7 @@ mod tests {
         ctx.initialize(10);
         for _ in 0..100 {
             let mut tree = Tree::from_rule_vec(
-                vec![r1, r2, r3]
+                [r1, r2, r3]
                     .iter()
                     .map(|x| RuleIDOrCustom::Rule(*x))
                     .collect::<Vec<_>>(),
@@ -391,13 +393,13 @@ mod tests {
             {
                 let mut tester =
                     |tree_mut: &TreeMutation, _bits: &HashSet<usize>, ctx: &Context| {
-                        if String::from_utf8(tree_mut.unparse_to_vec(&ctx))
+                        if String::from_utf8(tree_mut.unparse_to_vec(ctx))
                             .expect("RAND_2486760939")
                             .contains("a1")
                         {
-                            return Ok(true);
+                            Ok(true)
                         } else {
-                            return Ok(false);
+                            Ok(false)
                         }
                     };
                 let tree_size = tree.size();
@@ -429,7 +431,7 @@ mod tests {
         ctx.initialize(10);
         for _ in 0..100 {
             let mut tree = Tree::from_rule_vec(
-                vec![r1, r2, r3]
+                [r1, r2, r3]
                     .iter()
                     .map(|x| RuleIDOrCustom::Rule(*x))
                     .collect::<Vec<_>>(),
@@ -439,13 +441,13 @@ mod tests {
             {
                 let mut tester =
                     |tree_mut: &TreeMutation, _bits: &HashSet<usize>, ctx: &Context| {
-                        if String::from_utf8(tree_mut.unparse_to_vec(&ctx))
+                        if String::from_utf8(tree_mut.unparse_to_vec(ctx))
                             .expect("RAND_1958219388")
                             .contains("a1")
                         {
-                            return Ok(true);
+                            Ok(true)
                         } else {
-                            return Ok(false);
+                            Ok(false)
                         }
                     };
                 let tree_size = tree.size();
@@ -477,9 +479,9 @@ mod tests {
             let mut count = 0;
             {
                 let mut tester = |tree_mut: &TreeMutation, ctx: &Context| {
-                    assert_ne!(tree_mut.unparse_to_vec(&ctx), unparse);
+                    assert_ne!(tree_mut.unparse_to_vec(ctx), unparse);
                     count += 1;
-                    return Ok(());
+                    Ok(())
                 };
                 mutator
                     .mut_rules(&tree, &ctx, 0, tree.size(), &mut tester)
@@ -505,8 +507,8 @@ mod tests {
             let mut mutator = Mutator::new(&ctx);
             let unparse = tree.unparse_to_vec(&ctx);
             let mut tester = |tree_mut: &TreeMutation, ctx: &Context| {
-                assert_ne!(tree_mut.unparse_to_vec(&ctx), unparse);
-                return Ok(());
+                assert_ne!(tree_mut.unparse_to_vec(ctx), unparse);
+                Ok(())
             };
             mutator
                 .mut_splice(&tree, &ctx, &cks, &mut tester)
@@ -526,7 +528,7 @@ mod tests {
         ctx.initialize(10);
         for _ in 0..100 {
             let tree = Tree::from_rule_vec(
-                vec![r1, r2, r3]
+                [r1, r2, r3]
                     .iter()
                     .map(|x| RuleIDOrCustom::Rule(*x))
                     .collect::<Vec<_>>(),
@@ -536,15 +538,15 @@ mod tests {
             let mut unparses = HashSet::new();
             {
                 let mut tester = |tree_mut: &TreeMutation, ctx: &Context| {
-                    unparses.insert(tree_mut.unparse_to_vec(&ctx));
-                    return Ok(());
+                    unparses.insert(tree_mut.unparse_to_vec(ctx));
+                    Ok(())
                 };
                 mutator
                     .mut_rules(&tree, &ctx, 0, tree.size(), &mut tester)
                     .expect("RAND_3954705736");
             }
-            print!(
-                "{:?}\n",
+            println!(
+                "{:?}",
                 unparses
                     .iter()
                     .map(|v| str::from_utf8(v).expect("RAND_3927087882"))
