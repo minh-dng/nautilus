@@ -28,6 +28,20 @@ You specify a grammar using rules such as `EXPR -> EXPR + EXPR` or `EXPR -> NUM`
 <img width="400" align="center" src="https://github.com/RUB-SysSec/nautilus/raw/master/tree.png">
 </p>
 
+## Python grammar development
+
+The Python grammar definitions use Python 3.12. Install the matching interpreter and
+quality tools with [mise](https://mise.jdx.dev):
+
+```bash
+mise trust
+mise install
+mise run check
+```
+
+Use `mise run lint`, `mise run fmt:check`, `mise run typecheck`, or `mise run syntax`
+to run an individual check.
+
 ## Setup
 ```bash
 # checkout the git
