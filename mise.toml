@@ -36,11 +36,15 @@ run = "cargo fmt --all -- --check"
 description = "Lint all Rust workspace targets with warnings denied"
 run = "cargo clippy --workspace --all-targets --locked -- -D warnings"
 
+[tasks."target:prepare"]
+description = "Build the bundled AFL++-instrumented forkserver target"
+run = "afl-clang-fast test.c -o test"
+
 [tasks."rust:test"]
 description = "Test the locked Rust workspace with its instrumented target"
 run = '''
 if [ ! -x ./test ]; then
-  echo >&2 "error: ./test is required by forksrv tests; build it with: afl-clang-fast test.c -o test"
+  echo >&2 "error: ./test is required by forksrv tests; build it with: mise run target:prepare"
   exit 1
 fi
 cargo test --workspace --locked
