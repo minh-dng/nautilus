@@ -6,7 +6,7 @@ ruff = "latest"
 "pipx:basedpyright" = "latest"
 
 [settings]
-idiomatic_version_file_enable_tools = ["python"]
+idiomatic_version_file_enable_tools = ["python", "rust"]
 
 [tasks.lint]
 description = "Lint Python grammar definitions with Ruff"
@@ -24,6 +24,37 @@ run = "basedpyright"
 description = "Compile Python grammar definitions with Python 3.12"
 run = "python -m compileall -q grammars test_cases"
 
+[tasks."rust:build"]
+description = "Build the locked Rust workspace"
+run = "cargo build --workspace --locked"
+
+[tasks."rust:fmt"]
+description = "Check Rust workspace formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks."rust:clippy"]
+description = "Lint all Rust workspace targets with warnings denied"
+run = "cargo clippy --workspace --all-targets --locked -- -D warnings"
+
+[tasks."rust:test"]
+description = "Test the locked Rust workspace with its instrumented target"
+run = '''
+if [ ! -x ./test ]; then
+  echo >&2 "error: ./test is required by forksrv tests; build it with: afl-clang-fast test.c -o test"
+  exit 1
+fi
+cargo test --workspace --locked
+'''
+
 [tasks.check]
-description = "Run all Python grammar static checks"
-depends = ["syntax", "lint", "fmt:check", "typecheck"]
+description = "Run all Python and Rust checks"
+depends = [
+  "syntax",
+  "lint",
+  "fmt:check",
+  "typecheck",
+  "rust:build",
+  "rust:fmt",
+  "rust:clippy",
+  "rust:test",
+]

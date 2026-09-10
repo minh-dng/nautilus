@@ -28,10 +28,14 @@ You specify a grammar using rules such as `EXPR -> EXPR + EXPR` or `EXPR -> NUM`
 <img width="400" align="center" src="https://github.com/RUB-SysSec/nautilus/raw/master/tree.png">
 </p>
 
-## Python grammar development
+## Development toolchain
 
-The Python grammar definitions use Python 3.12. Install the matching interpreter and
-quality tools with [mise](https://mise.jdx.dev):
+[mise](https://mise.jdx.dev) installs Python 3.12, Ruff, basedPyright, and the Rust
+components declared in `rust-toolchain.toml`: Rust 1.98.1, rustfmt, Clippy,
+rust-analyzer, and rust-src. The toolchain file is the sole maintained Rust version
+pin; mise discovers it rather than repeating the version in `mise.toml`. Existing
+`MISE_CARGO_HOME` and `MISE_RUSTUP_HOME` settings are respected, so mise reuses those
+homes instead of creating a competing Rust installation.
 
 ```bash
 mise trust
@@ -39,8 +43,48 @@ mise install
 mise run check
 ```
 
-Use `mise run lint`, `mise run fmt:check`, `mise run typecheck`, or `mise run syntax`
-to run an individual check.
+Focused Python checks remain available as `mise run lint`, `mise run fmt:check`,
+`mise run typecheck`, and `mise run syntax`. Focused Rust checks are:
+
+```bash
+mise run rust:build   # cargo build --workspace --locked
+mise run rust:fmt     # cargo fmt --all -- --check
+mise run rust:clippy  # workspace/all-target Clippy with warnings denied
+mise run rust:test    # cargo test --workspace --locked
+```
+
+`mise run check` runs every Python and Rust check above. The full Rust tests require
+an AFL++-instrumented `./test`; the task fails with its build command when that
+executable is absent instead of reporting a skipped test as successful:
+
+```bash
+afl-clang-fast test.c -o test
+mise run rust:test
+```
+
+For editor discovery, start the editor from an activated mise shell or configure its
+Rust language-server command from `mise which rust-analyzer`. Verify the selected
+executables and components with:
+
+```bash
+mise exec -- rustc --version
+mise exec -- cargo --version
+mise exec -- rustfmt --version
+mise exec -- cargo clippy --version
+mise exec -- rust-analyzer --version
+mise exec -- rustup component list --installed
+```
+
+### Native prerequisites
+
+mise manages the executables above. Cargo resolves Rust crates, including the PyO3
+embedding dependency, from the committed `Cargo.lock`; Cargo dependencies do not
+install system software. The host must separately provide Linux, a native C
+compiler/linker, and a Python 3.12 installation with headers and a linkable Python
+library. The mise Python distribution supplies the Python development files on
+supported systems. Running the fork-server test additionally needs AFL++'s
+`afl-clang-fast` to build the instrumented target shown above. Distribution package
+names vary, and these OS packages and fuzz-target provisioning are outside mise.
 
 ## Setup
 ```bash
