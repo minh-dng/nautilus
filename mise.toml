@@ -1,0 +1,29 @@
+min_version = "2025.6.0"
+
+[tools]
+python = "3.12"
+ruff = "latest"
+"pipx:basedpyright" = "latest"
+
+[settings]
+idiomatic_version_file_enable_tools = ["python"]
+
+[tasks.lint]
+description = "Lint Python grammar definitions with Ruff"
+run = "ruff check grammars test_cases"
+
+[tasks."fmt:check"]
+description = "Check maintained Python grammar formatting with Ruff"
+run = "ruff format --check grammars/grammar_py_example.py test_cases/grammar_regex_root.py"
+
+[tasks.typecheck]
+description = "Check Python grammar definitions with basedPyright"
+run = "basedpyright"
+
+[tasks.syntax]
+description = "Compile Python grammar definitions with Python 3.12"
+run = "python -m compileall -q grammars test_cases"
+
+[tasks.check]
+description = "Run all Python grammar static checks"
+depends = ["syntax", "lint", "fmt:check", "typecheck"]

@@ -1,0 +1,20 @@
+# Grammar definitions are not a Python package (loaded via PyO3); this only
+# declares the supported interpreter range.
+[project]
+requires-python = ">=3.12,<3.13"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# Nautilus injects ctx when it loads each grammar definition.
+ignore = ["F821"]
+
+[tool.basedpyright]
+include = ["grammars", "test_cases"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+# Nautilus injects ctx when it loads each grammar definition.
+reportUndefinedVariable = "none"
