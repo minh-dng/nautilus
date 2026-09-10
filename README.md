@@ -54,11 +54,11 @@ mise run rust:test    # cargo test --workspace --locked
 ```
 
 `mise run check` runs every Python and Rust check above. The full Rust tests require
-an AFL++-instrumented `./test`; the task fails with its build command when that
+an AFL++-instrumented `./test`; the task fails with its preparation command when that
 executable is absent instead of reporting a skipped test as successful:
 
 ```bash
-afl-clang-fast test.c -o test
+mise run target:prepare
 mise run rust:test
 ```
 
@@ -74,6 +74,72 @@ mise exec -- cargo clippy --version
 mise exec -- rust-analyzer --version
 mise exec -- rustup component list --installed
 ```
+
+### Docker development/test image
+
+`Dockerfile` pins a Debian 12 (glibc 2.36) base by digest, the matching Debian
+package snapshot, mise 2026.9.3, and AFL++ 4.10c (the latest tagged release using
+the legacy forkserver handshake consumed here). mise then installs the locked
+Python 3.12 and Rust toolchains. `PYO3_PYTHON` selects that mise Python explicitly;
+the image build checks its embedding header and shared library before preparing the
+bundled AFL++ target through `mise run target:prepare`.
+
+Build from a clean checkout with the host user's IDs so bind-mounted outputs remain
+owned by that user. These commands are deliberately bounded and start without Docker
+layer reuse:
+
+```bash
+timeout 30m docker build --pull --no-cache \
+  --build-arg USER_ID="$(id -u)" --build-arg GROUP_ID="$(id -g)" \
+  -t nautilus-dev:issue-11 .
+
+timeout 10m docker run --rm nautilus-dev:issue-11 mise run rust:build
+timeout 10m docker run --rm nautilus-dev:issue-11 \
+  mise exec -- cargo test --locked -p fuzzer --bin fuzzer \
+  python_grammar_loader::tests::loads_and_unparses_script_rule -- --exact
+timeout 10m docker run --rm --ulimit core=0 nautilus-dev:issue-11 \
+  mise exec -- cargo test --locked -p forksrv tests::run_forkserver -- --exact
+```
+
+The last test performs the real AFL++ forkserver handshake and checks normal exit,
+SIGABRT, and non-empty coverage. It is not replaced with an uninstrumented target.
+Disabling core dumps preserves the SIGABRT result while preventing a host core-dump
+handler inherited by Docker from exceeding the test's 200 ms target timeout. The
+complete `mise run rust:test` and `mise run check` remain available; issue #12 owns
+shared-directory test isolation, so this image does not serialize, retry, or skip
+those tests.
+
+For development, mount the checkout and a pre-created writable work directory. Run
+the preparation task after mounting because the mount hides the target baked into
+the image:
+
+```bash
+mkdir -p .docker-work
+docker run --rm -it --ulimit core=0 \
+  --mount type=bind,src="$PWD",dst=/workspace \
+  --mount type=bind,src="$PWD/.docker-work",dst=/work \
+  nautilus-dev:issue-11 bash
+# inside the container
+mise trust mise.toml
+mise run target:prepare
+```
+
+The image runs as the normal `nautilus` user whose IDs were selected at build time;
+it needs neither privileged mode nor host IPC. Put corpora, findings, and other
+writable fuzzing artifacts under `/work` rather than an image layer. The build
+context excludes host mise/Cargo/Rust homes, compiled targets, and common fuzzing
+outputs through `.dockerignore`.
+
+The verified platform is native Linux ARM64; that is this image's initial automation
+architecture contract. The Dockerfile also has checked mise downloads for Linux
+AMD64, but that path is not yet verified. No emulated or cross-architecture result is
+claimed.
+
+> **Trust boundary:** Docker shares the host kernel and is only a reproducible
+> development environment here, not sufficient isolation for arbitrary untrusted
+> fuzz targets. Use a separately hardened sandbox or VM for those targets. Registry
+> publication, a production runtime image, CI wiring, and broader test isolation are
+> intentionally outside this image.
 
 ### Native prerequisites
 

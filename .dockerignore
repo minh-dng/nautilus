@@ -1,0 +1,17 @@
+.git
+.cargo
+.rustup
+.mise
+.venv
+__pycache__
+*.py[cod]
+target
+test
+workdir
+output
+findings
+corpus
+crashes
+hangs
+queue
+.docker-work

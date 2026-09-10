@@ -225,3 +225,14 @@ rust-project.json
 
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,rust-analyzer,rust,python
+
+# Nautilus build and fuzzing artifacts
+/test
+/.docker-work/
+/workdir/
+/output/
+/findings/
+/corpus/
+/crashes/
+/hangs/
+/queue/
