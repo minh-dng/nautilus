@@ -14,6 +14,7 @@ run = "ruff check grammars test_cases"
 
 [tasks."fmt:check"]
 description = "Check maintained Python grammar formatting with Ruff"
+# Large generated grammar corpora stay unformatted; add new maintained grammars here.
 run = "ruff format --check grammars/grammar_py_example.py test_cases/grammar_regex_root.py"
 
 [tasks.typecheck]
