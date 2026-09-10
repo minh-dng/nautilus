@@ -1,3 +1,8 @@
+# Grammar definitions are not a Python package (loaded via PyO3); this only
+# declares the supported interpreter range.
+[project]
+requires-python = ">=3.12,<3.13"
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
