@@ -5,7 +5,6 @@ use rand::Rng;
 use rand::seq::IndexedMutRandom;
 
 use std::collections::HashSet;
-use std::mem;
 
 use crate::chunkstore::ChunkStore;
 use crate::context::Context;
@@ -55,7 +54,7 @@ impl Mutator {
                     bits,
                     tester,
                 )? {
-                    mem::replace(tree, t);
+                    *tree = t;
                 }
             }
             i += 1;
@@ -86,7 +85,7 @@ impl Mutator {
                 if let Some(t) =
                     Mutator::test_and_convert(tree, parent, tree, n, ctx, bits, tester)?
                 {
-                    mem::replace(tree, t);
+                    *tree = t;
                     i = parent.into();
                 }
             }

@@ -38,10 +38,12 @@ use exitreason::ExitReason;
 use newtypes::*;
 use snafu::ResultExt;
 
+// This only runs in the forked child; setup failure is fatal, as with the previous
+// `nix::unistd::dup2(...).expect(...)` calls.
 fn dup2_raw_fd(old: RawFd, new: RawFd, error_message: &str) {
     let res = unsafe { nix::libc::dup2(old, new) };
     if res < 0 {
-        panic!("{}", error_message);
+        panic!("{}: {}", error_message, std::io::Error::last_os_error());
     }
 }
 
