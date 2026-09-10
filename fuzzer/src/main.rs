@@ -1,16 +1,6 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-extern crate forksrv;
-extern crate grammartec;
-extern crate serde_json;
-extern crate time as othertime;
-#[macro_use]
-extern crate serde_derive;
-extern crate clap;
-extern crate pyo3;
-extern crate ron;
-
 mod config;
 mod fuzzer;
 mod python_grammar_loader;
@@ -18,16 +8,16 @@ mod queue;
 mod shared_state;
 mod state;
 
-use config::Config;
+use crate::config::Config;
+use crate::fuzzer::{Fuzzer, timestamp};
+use crate::queue::{InputState, QueueItem};
+use crate::shared_state::GlobalSharedState;
+use crate::state::FuzzingState;
 use forksrv::newtypes::SubprocessError;
-use fuzzer::Fuzzer;
 use grammartec::chunkstore::ChunkStoreWrapper;
 use grammartec::context::Context;
-use queue::{InputState, QueueItem};
-use shared_state::GlobalSharedState;
-use state::FuzzingState;
 
-use clap::{App, Arg};
+use clap::Parser;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -36,6 +26,48 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{thread, time};
+
+#[derive(Parser)]
+#[command(name = "nautilus", about = "Grammar fuzzer")]
+struct Args {
+    /// Path to configuration file
+    #[arg(short = 'c', value_name = "CONFIG", default_value = "config.ron")]
+    config: String,
+    /// Overwrite the grammar file specified in the CONFIG
+    #[arg(short = 'g')]
+    grammar: Option<String>,
+    /// Overwrite the workdir specified in the CONFIG
+    #[arg(short = 'o')]
+    workdir: Option<String>,
+    /// Target binary and arguments (use `--` to separate from fuzzer flags)
+    #[arg(trailing_var_arg = true)]
+    cmdline: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_overrides_and_target_command() {
+        let args = Args::try_parse_from([
+            "fuzzer",
+            "-g",
+            "grammar.py",
+            "-o",
+            "/tmp/workdir",
+            "--",
+            "./target",
+            "@@",
+        ])
+        .unwrap();
+
+        assert_eq!(args.config, "config.ron");
+        assert_eq!(args.grammar.as_deref(), Some("grammar.py"));
+        assert_eq!(args.workdir.as_deref(), Some("/tmp/workdir"));
+        assert_eq!(args.cmdline, ["./target", "@@"]);
+    }
+}
 
 fn process_input(
     state: &mut FuzzingState,
@@ -188,46 +220,12 @@ fn fuzzing_thread(
 }
 
 fn main() {
-    
-    pyo3::prepare_freethreaded_python();
-
     //Parse parameters
-    let matches = App::new("nautilus")
-        .about("Grammar fuzzer")
-        .setting(clap::AppSettings::TrailingVarArg)
-        .arg(
-            Arg::with_name("config")
-                .short("c")
-                .value_name("CONFIG")
-                .takes_value(true)
-                .help("Path to configuration file")
-                .default_value("config.ron"),
-        )
-        .arg(
-            Arg::with_name("grammar")
-                .short("g")
-                .takes_value(true)
-                .help("Overwrite the grammar file specified in the CONFIG"),
-        )
-        .arg(
-            Arg::with_name("workdir")
-                .short("o")
-                .takes_value(true)
-                .help("Overwrite the workdir specified in the CONFIG"),
-        )
-        .arg(Arg::with_name("cmdline").multiple(true))
-        .get_matches();
+    let args = Args::parse();
 
-    let config_file_path = matches
-        .value_of("config")
-        .expect("the path to the configuration file has a default value");
+    let config_file_path = args.config;
 
-    println!(
-        "{} Starting Fuzzing...",
-        othertime::now()
-            .strftime("[%Y-%m-%d] %H:%M:%S")
-            .expect("RAND_1939191497")
-    );
+    println!("{} Starting Fuzzing...", timestamp());
 
     //Set Config
     let mut config_file = File::open(&config_file_path).expect("cannot read config file");
@@ -238,10 +236,9 @@ fn main() {
     let mut config: Config =
         ron::de::from_str(&config_file_contents).expect("Failed to deserialize");
 
-    let workdir = matches
-        .value_of("workdir")
-        .unwrap_or(&config.path_to_workdir)
-        .to_string();
+    let workdir = args
+        .workdir
+        .unwrap_or_else(|| config.path_to_workdir.clone());
     config.path_to_workdir = workdir;
 
     //Check if specified workdir exists:
@@ -252,11 +249,10 @@ fn main() {
         );
     }
 
-    if let Some(mut cmdline) = matches.values_of("cmdline") {
-        if cmdline.len() > 0 {
-            config.path_to_bin_target = cmdline.next().unwrap().to_string();
-            config.arguments = cmdline.map(|x| x.to_string()).collect();
-        }
+    if !args.cmdline.is_empty() {
+        let mut cmdline = args.cmdline.into_iter();
+        config.path_to_bin_target = cmdline.next().unwrap();
+        config.arguments = cmdline.collect();
     }
     //Check if target binary exists:
     if !Path::new(&config.path_to_bin_target).exists() {
@@ -273,10 +269,9 @@ fn main() {
     let shared_chunkstore = Arc::new(ChunkStoreWrapper::new(config.path_to_workdir.clone()));
 
     let mut my_context;
-    let grammar_path = matches
-        .value_of("grammar")
-        .unwrap_or(&config.path_to_grammar)
-        .to_owned();
+    let grammar_path = args
+        .grammar
+        .unwrap_or_else(|| config.path_to_grammar.clone());
 
     //Check if grammar file exists:
     if !Path::new(&grammar_path).exists() {

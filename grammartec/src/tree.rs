@@ -7,20 +7,19 @@ use std::io;
 use std::io::Write;
 use std::marker::Sized;
 
-use context::Context;
-use newtypes::{NTermID, NodeID, RuleID};
-use pyo3::prelude::{PyObject, PyResult, Python};
-use pyo3::types::{PyBytes, PyString, PyTuple};
-use pyo3::FromPyObject;
-use recursion_info::RecursionInfo;
-use rule::{PlainRule, Rule, RuleChild, RuleIDOrCustom, ScriptRule, RegExpRule};
-use rand::thread_rng;
+use crate::context::Context;
+use crate::newtypes::{NTermID, NodeID, RuleID};
+use crate::recursion_info::RecursionInfo;
+use crate::rule::{PlainRule, RegExpRule, Rule, RuleChild, RuleIDOrCustom, ScriptRule};
+use pyo3::types::{PyBytes, PyTuple};
+use pyo3::{Py, PyAny, PyResult, Python};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 enum UnparseStep<'dat> {
     Term(&'dat [u8]),
     Nonterm(NTermID),
-    Script(usize, PyObject),
+    Script(usize, Py<PyAny>),
     PushBuffer(),
 }
 
@@ -62,36 +61,35 @@ impl<'data, 'tree: 'data, 'ctx: 'data, W: Write, T: TreeLike> Unparser<'data, 't
 
     fn write(&mut self, data: &[u8]) {
         if let Some(buff) = self.buffers.last_mut() {
-            buff.write(data).unwrap();
+            buff.write_all(data).unwrap();
         } else {
-            self.w.write(data).unwrap();
+            self.w.write_all(data).unwrap();
         }
     }
 
     fn nonterm(&mut self, nt: NTermID) {
         self.next_rule(nt);
     }
-    fn unwrap_script(&mut self, num: usize, expr: PyObject) {
-        Python::with_gil(|py| {
+    fn unwrap_script(&mut self, num: usize, expr: Py<PyAny>) {
+        Python::attach(|py| {
             self.script(py, num, expr)
                 .map_err(|e| e.print_and_set_sys_last_vars(py))
                 .unwrap();
-            });
+        });
     }
-    fn script(&mut self, py: Python, num: usize, expr: PyObject) -> PyResult<()> {
-        use pyo3::PyRef;
+    fn script(&mut self, py: Python<'_>, num: usize, expr: Py<PyAny>) -> PyResult<()> {
         let bufs = self.buffers.split_off(self.buffers.len() - num);
         let bufs = bufs
             .into_iter()
             .map(|cur| cur.into_inner())
             .collect::<Vec<_>>();
         let byte_arrays = bufs.iter().map(|b| PyBytes::new(py, b));
-        let res = expr.call1(py, PyTuple::new(py, byte_arrays))?;
-        if let Ok(s) = res.extract::<&str>(py){
+        let res = expr.call1(py, PyTuple::new(py, byte_arrays)?)?;
+        if let Ok(s) = res.extract::<&str>(py) {
             self.write(s.as_bytes());
         } else if let Ok(s) = res.extract::<&[u8]>(py) {
-            self.write(&s);
-        } else { 
+            self.write(s);
+        } else {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "script function should return string or bytes",
             ));
@@ -127,11 +125,11 @@ impl<'data, 'tree: 'data, 'ctx: 'data, W: Write, T: TreeLike> Unparser<'data, 't
 
     fn next_script(&mut self, r: &ScriptRule) {
         {
-            Python::with_gil(|py|{
-            self.stack.push(UnparseStep::Script(
-                r.nonterms.len(),
-                r.script.clone_ref(py),
-            ));
+            Python::attach(|py| {
+                self.stack.push(UnparseStep::Script(
+                    r.nonterms.len(),
+                    r.script.clone_ref(py),
+                ));
             });
         }
         for nterm in r.nonterms.iter().rev() {
@@ -336,7 +334,7 @@ impl Tree {
             Rule::RegExp(RegExpRule { hir, .. }) => {
                 let rid = RuleIDOrCustom::Custom(
                     ruleid,
-                    regex_mutator::generate(hir, thread_rng().gen::<u64>()),
+                    regex_mutator::generate(hir, rand::rng().random::<u64>()),
                 );
                 self.truncate();
                 self.rules.push(rid);
@@ -445,8 +443,8 @@ impl<'a> TreeLike for TreeMutation<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use context::Context;
-    use newtypes::NodeID;
+    use crate::context::Context;
+    use crate::newtypes::NodeID;
 
     fn calc_subtree_sizes_and_parents_rec_test(tree: &mut Tree, n: NodeID, ctx: &Context) -> usize {
         let mut cur = n + 1;

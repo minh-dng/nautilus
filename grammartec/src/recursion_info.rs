@@ -1,21 +1,18 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-use rand::Rng;
-use rand::thread_rng;
-use rand::SeedableRng;
-use rand::rngs::StdRng;
+use rand::distr::Distribution;
+use rand::distr::weighted::WeightedIndex;
 use std::collections::HashMap;
 use std::fmt;
 
-use context::Context;
-use loaded_dice::LoadedDiceSampler;
-use newtypes::{NTermID, NodeID};
-use tree::Tree;
+use crate::context::Context;
+use crate::newtypes::{NTermID, NodeID};
+use crate::tree::Tree;
 
 pub struct RecursionInfo {
     recursive_parents: HashMap<NodeID, NodeID>,
-    sampler: LoadedDiceSampler<StdRng>,
+    sampler: WeightedIndex<f64>,
     depth_by_offset: Vec<usize>,
     node_by_offset: Vec<NodeID>,
 }
@@ -79,18 +76,14 @@ impl RecursionInfo {
         return res;
     }
 
-    fn build_sampler(depths: &Vec<usize>) -> LoadedDiceSampler<StdRng> {
-        let mut weights = depths.iter().map(|x| *x as f64).collect::<Vec<_>>();
-        let norm: f64 = weights.iter().sum();
-        assert!(norm > 0.0);
-        for v in weights.iter_mut() {
-            *v /= norm;
-        }
-        return LoadedDiceSampler::new(weights, StdRng::from_rng(thread_rng()).expect("RAND_1769941938"));
+    fn build_sampler(depths: &Vec<usize>) -> WeightedIndex<f64> {
+        let weights = depths.iter().map(|x| *x as f64).collect::<Vec<_>>();
+        assert!(weights.iter().sum::<f64>() > 0.0);
+        return WeightedIndex::new(weights).expect("RAND_1769941938");
     }
 
     pub fn get_random_recursion_pair(&mut self) -> (NodeID, NodeID) {
-        let offset = self.sampler.sample();
+        let offset = self.sampler.sample(&mut rand::rng());
         return self.get_recursion_pair_by_offset(offset);
     }
 

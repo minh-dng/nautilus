@@ -1,7 +1,6 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-
 extern crate byteorder;
 extern crate nix;
 extern crate snafu;
@@ -15,16 +14,16 @@ pub mod newtypes;
 
 use nix::fcntl;
 use nix::libc::{
-    __errno_location, shmat, shmctl, shmget, strerror, IPC_CREAT, IPC_EXCL, IPC_PRIVATE, IPC_RMID,
+    __errno_location, IPC_CREAT, IPC_EXCL, IPC_PRIVATE, IPC_RMID, shmat, shmctl, shmget, strerror,
 };
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::sys::wait::WaitStatus;
 use nix::unistd;
 use nix::unistd::Pid;
-use nix::unistd::{fork, ForkResult};
+use nix::unistd::{ForkResult, fork};
 use std::ffi::CString;
-use std::os::unix::io::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::io::RawFd;
 
 use std::io::BufReader;
@@ -34,11 +33,17 @@ use timeout_readwrite::TimeoutReader;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::fs::File;
-use std::os::unix::io::FromRawFd;
 
 use exitreason::ExitReason;
 use newtypes::*;
 use snafu::ResultExt;
+
+fn dup2_raw_fd(old: RawFd, new: RawFd, error_message: &str) {
+    let res = unsafe { nix::libc::dup2(old, new) };
+    if res < 0 {
+        panic!("{}", error_message);
+    }
+}
 
 pub struct ForkServer {
     inp_file: File,
@@ -71,13 +76,13 @@ impl ForkServer {
         let (st_out, st_in) = nix::unistd::pipe().expect("failed to create st_pipe");
         let (shm_file, shared_data) = ForkServer::create_shm(bitmap_size);
 
-        match fork().expect("couldn't fork") {
+        match unsafe { fork() }.expect("couldn't fork") {
             // Parent returns
             ForkResult::Parent { child: _, .. } => {
                 unistd::close(ctl_out).expect("coulnd't close ctl_out");
                 unistd::close(st_in).expect("coulnd't close st_out");
                 let mut st_out = BufReader::new(TimeoutReader::new(
-                    unsafe { File::from_raw_fd(st_out) },
+                    File::from(st_out),
                     Duration::from_millis(timeout_in_millis),
                 ));
                 st_out
@@ -85,7 +90,7 @@ impl ForkServer {
                     .expect("couldn't read child hello");
                 return Self {
                     inp_file: inp_file,
-                    ctl_in: unsafe { File::from_raw_fd(ctl_in) },
+                    ctl_in: File::from(ctl_in),
                     shared_data: shared_data,
                     st_out,
                 };
@@ -93,18 +98,24 @@ impl ForkServer {
             //Child does complex stuff
             ForkResult::Child => {
                 let forkserver_fd = 198; // from AFL config.h
-                unistd::dup2(ctl_out, forkserver_fd as RawFd)
-                    .expect("couldn't dup2 ctl_our to FROKSRV_FD");
-                unistd::dup2(st_in, (forkserver_fd + 1) as RawFd)
-                    .expect("couldn't dup2 ctl_our to FROKSRV_FD+1");
+                dup2_raw_fd(
+                    ctl_out.as_raw_fd(),
+                    forkserver_fd,
+                    "couldn't dup2 ctl_out to FROKSRV_FD",
+                );
+                dup2_raw_fd(
+                    st_in.as_raw_fd(),
+                    forkserver_fd + 1,
+                    "couldn't dup2 st_in to FROKSRV_FD+1",
+                );
 
-                unistd::dup2(inp_file.as_raw_fd(), 0).expect("couldn't dup2 input file to stdin");
-                unistd::close(inp_file.as_raw_fd()).expect("couldn't close input file");
+                dup2_raw_fd(inp_file.as_raw_fd(), 0, "couldn't dup2 input file to stdin");
+                drop(inp_file);
 
                 unistd::close(ctl_in).expect("couldn't close ctl_in");
                 unistd::close(ctl_out).expect("couldn't close ctl_out");
-                unistd::close(st_in).expect("couldn't close ctl_out");
-                unistd::close(st_out).expect("couldn't close ctl_out");
+                unistd::close(st_in).expect("couldn't close st_in");
+                unistd::close(st_out).expect("couldn't close st_out");
 
                 let path = CString::new(path).expect("binary path must not contain zero");
                 let args = args
@@ -124,13 +135,21 @@ impl ForkServer {
                 if hide_output {
                     let null = fcntl::open("/dev/null", fcntl::OFlag::O_RDWR, stat::Mode::empty())
                         .expect("couldn't open /dev/null");
-                    unistd::dup2(null, 1 as RawFd).expect("couldn't dup2 /dev/null to stdout");
-                    unistd::dup2(null, 2 as RawFd).expect("couldn't dup2 /dev/null to stderr");
+                    dup2_raw_fd(
+                        null.as_fd().as_raw_fd(),
+                        1,
+                        "couldn't dup2 /dev/null to stdout",
+                    );
+                    dup2_raw_fd(
+                        null.as_fd().as_raw_fd(),
+                        2,
+                        "couldn't dup2 /dev/null to stderr",
+                    );
                     unistd::close(null).expect("couldn't close /dev/null");
                 }
                 println!("EXECVE {:?} {:?} {:?}", path, args, env);
-                unistd::execve(&path, &args, &env).expect("couldn't execve afl-qemu-tarce");
-                unreachable!();
+                let _ = unistd::execve(&path, &args, &env);
+                panic!("couldn't execve forkserver target");
             }
         }
     }
@@ -139,42 +158,46 @@ impl ForkServer {
         for i in self.get_shared_mut().iter_mut() {
             *i = 0;
         }
-        unistd::ftruncate(self.inp_file.as_raw_fd(), 0).context(QemuRunNix {
+        unistd::ftruncate(self.inp_file.as_fd(), 0).context(QemuRunNixSnafu {
             task: "Couldn't truncate inp_file",
         })?;
-        unistd::lseek(self.inp_file.as_raw_fd(), 0, unistd::Whence::SeekSet).context(
-            QemuRunNix {
+        unistd::lseek(self.inp_file.as_fd(), 0, unistd::Whence::SeekSet).context(
+            QemuRunNixSnafu {
                 task: "Couldn't seek inp_file",
             },
         )?;
-        unistd::write(self.inp_file.as_raw_fd(), data).context(QemuRunNix {
+        unistd::write(self.inp_file.as_fd(), data).context(QemuRunNixSnafu {
             task: "Couldn't write data to inp_file",
         })?;
-        unistd::lseek(self.inp_file.as_raw_fd(), 0, unistd::Whence::SeekSet).context(
-            QemuRunNix {
+        unistd::lseek(self.inp_file.as_fd(), 0, unistd::Whence::SeekSet).context(
+            QemuRunNixSnafu {
                 task: "Couldn't seek inp_file",
             },
         )?;
 
-        unistd::write(self.ctl_in.as_raw_fd(), &[0, 0, 0, 0]).context(QemuRunNix {
+        unistd::write(self.ctl_in.as_fd(), &[0, 0, 0, 0]).context(QemuRunNixSnafu {
             task: "Couldn't send start command",
         })?;
 
-        let pid = Pid::from_raw(self.st_out.read_i32::<LittleEndian>().context(QemuRunIO {
-            task: "Couldn't read target pid",
-        })?);
+        let pid = Pid::from_raw(self.st_out.read_i32::<LittleEndian>().context(
+            QemuRunIOSnafu {
+                task: "Couldn't read target pid",
+            },
+        )?);
 
         if let Ok(status) = self.st_out.read_i32::<LittleEndian>() {
             return Ok(ExitReason::from_wait_status(
                 WaitStatus::from_raw(pid, status).expect("402104968"),
             ));
         }
-        signal::kill(pid, Signal::SIGKILL).context(QemuRunNix {
+        signal::kill(pid, Signal::SIGKILL).context(QemuRunNixSnafu {
             task: "Couldn't kill timed out process",
         })?;
-        self.st_out.read_u32::<LittleEndian>().context(QemuRunIO {
-            task: "couldn't read timeout exitcode",
-        })?;
+        self.st_out
+            .read_u32::<LittleEndian>()
+            .context(QemuRunIOSnafu {
+                task: "couldn't read timeout exitcode",
+            })?;
         return Ok(ExitReason::Timeouted);
     }
 

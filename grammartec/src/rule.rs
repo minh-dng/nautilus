@@ -1,14 +1,14 @@
 // Nautilus
 // Copyright (C) 2024  Daniel Teuchert, Cornelius Aschermann, Sergej Schumilo
 
-use context::Context;
-use newtypes::{NTermID, NodeID, RuleID};
-use pyo3::prelude::{PyObject, Python};
-use rand::thread_rng;
+use crate::context::Context;
+use crate::newtypes::{NTermID, NodeID, RuleID};
+use crate::tree::Tree;
+use pyo3::{Py, PyAny, Python};
 use rand::Rng;
-use regex;
 use regex_syntax::hir::Hir;
-use tree::Tree;
+use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum RuleChild {
@@ -39,14 +39,14 @@ impl RuleChild {
     }
 
     fn split_nt_description(nonterm: &str) -> (String, String) {
-        lazy_static! {
-            static ref SPLITTER: regex::Regex =
-                regex::Regex::new(r"^\{([A-Z][a-zA-Z_\-0-9]*)(?::([a-zA-Z_\-0-9]*))?\}$")
-                    .expect("RAND_1363289094");
-        }
+        static SPLITTER: OnceLock<regex::Regex> = OnceLock::new();
+        let splitter = SPLITTER.get_or_init(|| {
+            regex::Regex::new(r"^\{([A-Z][a-zA-Z_\-0-9]*)(?::([a-zA-Z_\-0-9]*))?\}$")
+                .expect("RAND_1363289094")
+        });
 
         //splits {A:a} or {A} into A and maybe a
-        let descr = SPLITTER.captures(nonterm).expect(&format!("could not interpret Nonterminal {:?}. Nonterminal Descriptions need to match start with a capital letter and con only contain [a-zA-Z_-0-9]",nonterm));
+        let descr = splitter.captures(nonterm).expect(&format!("could not interpret Nonterminal {:?}. Nonterminal Descriptions need to match start with a capital letter and con only contain [a-zA-Z_-0-9]",nonterm));
         //let name = descr.get(2).map(|m| m.as_str().into()).unwrap_or(default.to_string()));
         return (descr[1].into(), "".into());
     }
@@ -103,7 +103,7 @@ impl RegExpRule {
 pub struct ScriptRule {
     pub nonterm: NTermID,
     pub nonterms: Vec<NTermID>,
-    pub script: PyObject,
+    pub script: Py<PyAny>,
 }
 
 impl ScriptRule {
@@ -139,12 +139,11 @@ impl PlainRule {
 
 impl Clone for ScriptRule {
     fn clone(&self) -> Self {
-        return Python::with_gil(|py| {
-        ScriptRule {
+        return Python::attach(|py| ScriptRule {
             nonterm: self.nonterm.clone(),
             nonterms: self.nonterms.clone(),
             script: self.script.clone_ref(py),
-        }});
+        });
     }
 }
 
@@ -153,7 +152,7 @@ impl Rule {
         ctx: &mut Context,
         nonterm: &str,
         nterms: Vec<String>,
-        script: PyObject,
+        script: Py<PyAny>,
     ) -> Self {
         return Self::Script(ScriptRule {
             nonterm: ctx.aquire_nt_id(nonterm),
@@ -163,14 +162,12 @@ impl Rule {
     }
 
     pub fn from_regex(ctx: &mut Context, nonterm: &str, regex: &str) -> Self {
-        use regex_syntax::ParserBuilder;
-
-        let mut parser = ParserBuilder::new()
+        let hir = regex_syntax::ParserBuilder::new()
             .unicode(true)
-            .allow_invalid_utf8(true)
-            .build();
-
-        let hir = parser.parse(regex).unwrap();
+            .utf8(false)
+            .build()
+            .parse(regex)
+            .unwrap();
 
         return Self::RegExp(RegExpRule {
             nonterm: ctx.aquire_nt_id(nonterm),
@@ -242,15 +239,15 @@ impl Rule {
     }
 
     fn tokenize(format: &[u8], ctx: &mut Context) -> Vec<RuleChild> {
-        lazy_static! {
-            static ref TOKENIZER: regex::bytes::Regex =
-                regex::bytes::RegexBuilder::new(r"(?-u)(\{[^}\\]+\})|((?:[^{\\]|\\\{|\\\}|\\)+)")
-                    .dot_matches_new_line(true)
-                    .build()
-                    .expect("RAND_994455541");
-        } //RegExp Changed from (\{[^}\\]+\})|((?:[^{\\]|\\\{|\\\}|\\\\)+) because of problems with \\ (\\ was not matched and therefore thrown away)
+        static TOKENIZER: OnceLock<regex::bytes::Regex> = OnceLock::new();
+        let tokenizer = TOKENIZER.get_or_init(|| {
+            regex::bytes::RegexBuilder::new(r"(?-u)(\{[^}\\]+\})|((?:[^{\\]|\\\{|\\\}|\\)+)")
+                .dot_matches_new_line(true)
+                .build()
+                .expect("RAND_994455541")
+        }); //RegExp Changed from (\{[^}\\]+\})|((?:[^{\\]|\\\{|\\\}|\\\\)+) because of problems with \\ (\\ was not matched and therefore thrown away)
 
-        return TOKENIZER
+        return tokenizer
             .captures_iter(format)
             .map(|cap| {
                 if let Some(sub) = cap.get(1) {
@@ -326,7 +323,7 @@ impl Rule {
                 Rule::Script(_) => RuleIDOrCustom::Rule(rid),
                 Rule::RegExp(RegExpRule { hir, .. }) => RuleIDOrCustom::Custom(
                     rid,
-                    regex_mutator::generate(hir, thread_rng().gen::<u64>()),
+                    regex_mutator::generate(hir, rand::rng().random::<u64>()),
                 ),
             };
 

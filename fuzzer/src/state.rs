@@ -3,8 +3,8 @@
 
 use std::collections::HashSet;
 use std::fs::File;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use grammartec::chunkstore::ChunkStoreWrapper;
@@ -12,10 +12,10 @@ use grammartec::context::Context;
 use grammartec::mutator::Mutator;
 use grammartec::tree::{TreeLike, TreeMutation};
 
-use config::Config;
+use crate::config::Config;
+use crate::fuzzer::{ExecutionReason, Fuzzer};
+use crate::queue::QueueItem;
 use forksrv::newtypes::SubprocessError;
-use fuzzer::{ExecutionReason, Fuzzer};
-use queue::QueueItem;
 
 pub struct FuzzingState {
     pub cks: Arc<ChunkStoreWrapper>,
@@ -78,7 +78,8 @@ impl FuzzingState {
             while self
                 .cks
                 .is_locked
-                .compare_and_swap(false, true, Ordering::Acquire)
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+                .is_err()
             {
                 if now.elapsed().as_secs() > 30 {
                     panic!("minimize starved!");

@@ -2,9 +2,9 @@
 name = "regex_mutator"
 version = "0.1.0"
 authors = ["coco <cornelius@hexgolems.com>"]
-edition = "2018"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-regex-syntax = "0.6.17"
+regex-syntax = "0.8"

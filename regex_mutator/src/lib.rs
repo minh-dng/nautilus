@@ -3,9 +3,7 @@
 
 extern crate regex_syntax;
 
-use regex_syntax::hir::{
-    Class, ClassBytesRange, ClassUnicodeRange, Hir, Literal, RepetitionKind, RepetitionRange,
-};
+use regex_syntax::hir::{Class, ClassBytesRange, ClassUnicodeRange, Hir, Literal, Repetition};
 
 pub struct RomuPrng {
     xstate: u64,
@@ -81,12 +79,7 @@ fn append_char(res: &mut Vec<u8>, chr: char) {
 }
 
 fn append_lit(res: &mut Vec<u8>, lit: &Literal) {
-    use regex_syntax::hir::Literal::*;
-
-    match lit {
-        Unicode(chr) => append_char(res, *chr),
-        Byte(b) => res.push(*b),
-    }
+    res.extend_from_slice(&lit.0);
 }
 
 fn append_unicode_range(res: &mut Vec<u8>, scr: &mut RegexScript, cls: &ClassUnicodeRange) {
@@ -125,22 +118,11 @@ fn get_length(scr: &mut RegexScript) -> usize {
     return scr.get_mod(2 << bits);
 }
 
-fn get_repetition_range(rep: &RepetitionRange, scr: &mut RegexScript) -> usize {
-    use regex_syntax::hir::RepetitionRange::*;
-    match rep {
-        Exactly(a) => return *a as usize,
-        AtLeast(a) => return get_length(scr) + (*a as usize),
-        Bounded(a, b) => return scr.get_range(*a as usize, *b as usize),
-    }
-}
-
-fn get_repetitions(rep: &RepetitionKind, scr: &mut RegexScript) -> usize {
-    use regex_syntax::hir::RepetitionKind::*;
-    match rep {
-        ZeroOrOne => return scr.get_mod(2),
-        ZeroOrMore => return get_length(scr),
-        OneOrMore => return 1 + get_length(scr),
-        Range(rng) => get_repetition_range(rng, scr),
+fn get_repetitions(rep: &Repetition, scr: &mut RegexScript) -> usize {
+    match rep.max {
+        Some(max) if max == rep.min => rep.min as usize,
+        Some(max) => scr.get_range(rep.min as usize, (max as usize) + 1),
+        None => (rep.min as usize) + get_length(scr),
     }
 }
 
@@ -154,18 +136,41 @@ pub fn generate(hir: &Hir, seed: u64) -> Vec<u8> {
             Empty => {}
             Literal(lit) => append_lit(&mut res, lit),
             Class(cls) => append_class(&mut res, &mut scr, cls),
-            Anchor(_) => {}
-            WordBoundary(_) => {}
+            Look(_) => {}
             Repetition(rep) => {
-                let num = get_repetitions(&rep.kind, &mut scr);
+                let num = get_repetitions(rep, &mut scr);
                 for _ in 0..num {
-                    stack.push(&rep.hir);
+                    stack.push(&rep.sub);
                 }
             }
-            Group(grp) => stack.push(&grp.hir),
+            Capture(cap) => stack.push(&cap.sub),
             Concat(hirs) => hirs.iter().rev().for_each(|h| stack.push(h)),
             Alternation(hirs) => stack.push(&hirs[scr.get_mod(hirs.len())]),
         }
     }
     return res;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use regex_syntax::Parser;
+
+    #[test]
+    fn generates_valid_repetition_lengths() {
+        for (pattern, min, max) in [
+            ("a{3}", 3, Some(3)),
+            ("a{2,4}", 2, Some(4)),
+            ("a{2,}", 2, None),
+        ] {
+            let hir = Parser::new().parse(pattern).unwrap();
+            for seed in 0..128 {
+                let length = generate(&hir, seed).len();
+                assert!(length >= min, "{pattern} generated {length} bytes");
+                if let Some(max) = max {
+                    assert!(length <= max, "{pattern} generated {length} bytes");
+                }
+            }
+        }
+    }
 }
