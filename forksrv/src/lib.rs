@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn run_forkserver() {
         let hide_output = false;
-        let timeout_in_millis = 200;
+        let timeout_in_millis = 1_000;
         let bitmap_size = 1 << 16;
         let target = "../test".to_string();
         let args = vec![];

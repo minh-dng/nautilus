@@ -50,6 +50,10 @@ fi
 cargo test --workspace --locked
 '''
 
+[tasks."generator:smoke"]
+description = "Generate a bounded corpus from the bundled Python grammar"
+run = "cargo test --locked -p fuzzer --test generator_smoke"
+
 [tasks.check]
 description = "Run all Python and Rust checks"
 depends = [
@@ -61,4 +65,5 @@ depends = [
   "rust:fmt",
   "rust:clippy",
   "rust:test",
+  "generator:smoke",
 ]

@@ -8,7 +8,7 @@ use grammartec::tree::TreeLike;
 use clap::Parser;
 use std::fs;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io;
 use std::path::Path;
 
 #[derive(Parser)]
@@ -87,15 +87,6 @@ fn main() {
             let mut stdout_handle = stdout.lock();
             generated_tree.unparse_to(&ctx, &mut stdout_handle);
         }
-
-        let mut of_tree = File::create("/tmp/test_tree.ron").expect("cannot create output file");
-        of_tree
-            .write_all(
-                ron::ser::to_string(&generated_tree)
-                    .expect("Serialization of Tree failed!")
-                    .as_bytes(),
-            )
-            .expect("Writing to tree file failed");
     }
 }
 
