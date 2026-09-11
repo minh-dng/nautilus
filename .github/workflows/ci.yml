@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Record commit SHA for image tag
+        id: meta
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: nautilus-ci:${{ steps.meta.outputs.sha }}
+          platforms: linux/arm64
+          cache-from: type=gha,scope=nautilus-ci-${{ hashFiles('Dockerfile', 'mise.lock', 'Cargo.lock', 'rust-toolchain.toml') }}
+          cache-to: type=gha,mode=max,scope=nautilus-ci-${{ hashFiles('Dockerfile', 'mise.lock', 'Cargo.lock', 'rust-toolchain.toml') }}
+
+      - name: Prepare target and run all checks
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 30m docker run --rm --ulimit core=0 \
+            nautilus-ci:${{ steps.meta.outputs.sha }} \
+            bash -lc 'mise run target:prepare && mise run check' \
+            2>&1 | tee ci-check.log
+
+      - name: Upload check log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-${{ steps.meta.outputs.sha }}
+          path: ci-check.log
+          retention-days: 7
+          if-no-files-found: ignore

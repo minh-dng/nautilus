@@ -143,6 +143,38 @@ claimed.
 > publication, a production runtime image, CI wiring, and broader test isolation are
 > intentionally outside this image.
 
+### CI
+
+Pull requests and pushes to `main` build the Docker image above and run the
+full `mise run check` suite inside it: Python checks (ruff, basedPyright,
+compile), Rust formatting, strict Clippy on all targets, locked workspace tests,
+and the generator smoke test. The workflow uses least-privilege `contents: read`
+permissions and `pull_request` (not `pull_request_target`), so fork PRs run
+safely without secrets or write credentials.
+
+CI runs natively on GitHub's `ubuntu-24.04-arm` runner, matching the verified
+Linux ARM64 container path; no cross-architecture matrix is implied.
+
+**Equivalent local command.** The simplest reproduction of the CI contract is:
+
+```bash
+docker build --platform linux/arm64 -t nautilus-ci .
+docker run --rm --ulimit core=0 nautilus-ci \
+  bash -lc 'mise run target:prepare && mise run check'
+```
+
+The `--ulimit core=0` flag is required: the forkserver test verifies `SIGABRT`
+behavior, and disabling core dumps prevents the host handler from stalling the
+test's one-second target timeout. See the Docker section above for longer-running
+single-test variants with `timeout` bounds.
+
+**Check-name migration.** The old host-based `Lint / rust` required check (which
+ran `cargo fmt` and `cargo clippy` on a raw Ubuntu runner) is replaced by
+`CI / checks`, which runs the full suite inside Docker. Update any branch
+protection rules that reference `Lint / rust` to require `CI / checks` instead.
+No check is silently removed; every previous gate is a strict subset of the new
+one.
+
 ### Native prerequisites
 
 mise manages the executables above. Cargo resolves Rust crates, including the PyO3
