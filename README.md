@@ -77,12 +77,13 @@ mise exec -- rustup component list --installed
 
 ### Docker development/test image
 
-`Dockerfile` pins a Debian 12 (glibc 2.36) base by digest, the matching Debian
-package snapshot, mise 2026.9.3, and AFL++ 4.10c (the latest tagged release using
-the legacy forkserver handshake consumed here). mise then installs the locked
-Python 3.12 and Rust toolchains. `PYO3_PYTHON` selects that mise Python explicitly;
-the image build checks its embedding header and shared library before preparing the
-bundled AFL++ target through `mise run target:prepare`.
+`Dockerfile` uses Ubuntu 24.04, mise 2026.9.5 via the official
+[`mise.run`](https://mise.run) installer, and AFL++ 4.10c (the latest tagged release
+using the legacy forkserver handshake consumed here). The installer selects the
+native architecture and installs the shared `mise` executable at `/usr/local/bin`.
+mise then installs the locked Python 3.12 and Rust toolchains. `PYO3_PYTHON` selects
+that mise Python explicitly; the image build checks its embedding header and shared
+library before preparing the bundled AFL++ target through `mise run target:prepare`.
 
 Build from a clean checkout with the host user's IDs so bind-mounted outputs remain
 owned by that user. These commands are deliberately bounded and start without Docker
@@ -131,9 +132,8 @@ context excludes host mise/Cargo/Rust homes, compiled targets, and common fuzzin
 outputs through `.dockerignore`.
 
 The verified platform is native Linux ARM64; that is this image's initial automation
-architecture contract. The Dockerfile also has checked mise downloads for Linux
-AMD64, but that path is not yet verified. No emulated or cross-architecture result is
-claimed.
+architecture contract. mise's official installer selects the native architecture, but
+AMD64 and emulated or cross-architecture builds have not been verified.
 
 > **Trust boundary:** Docker shares the host kernel and is only a reproducible
 > development environment here, not sufficient isolation for arbitrary untrusted
