@@ -47,13 +47,15 @@ Focused Python checks remain available as `mise run lint`, `mise run fmt:check`,
 `mise run typecheck`, and `mise run syntax`. Focused Rust checks are:
 
 ```bash
-mise run rust:build   # cargo build --workspace --locked
-mise run rust:fmt     # cargo fmt --all -- --check
-mise run rust:clippy  # workspace/all-target Clippy with warnings denied
-mise run rust:test    # cargo test --workspace --locked
+mise run rust:build       # cargo build --workspace --locked
+mise run rust:fmt         # cargo fmt --all -- --check
+mise run rust:clippy      # workspace/all-target Clippy with warnings denied
+mise run rust:test        # cargo test --workspace --locked
+mise run generator:smoke  # bounded public-CLI check with the bundled Python grammar
 ```
 
-`mise run check` runs every Python and Rust check above. The full Rust tests require
+`mise run check` runs every Python and Rust check above, including the generator
+smoke test. The full Rust tests require
 an AFL++-instrumented `./test`; the task fails with its preparation command when that
 executable is absent instead of reporting a skipped test as successful:
 
@@ -105,10 +107,10 @@ timeout 10m docker run --rm --ulimit core=0 nautilus-dev:issue-11 \
 The last test performs the real AFL++ forkserver handshake and checks normal exit,
 SIGABRT, and non-empty coverage. It is not replaced with an uninstrumented target.
 Disabling core dumps preserves the SIGABRT result while preventing a host core-dump
-handler inherited by Docker from exceeding the test's 200 ms target timeout. The
-complete `mise run rust:test` and `mise run check` remain available; issue #12 owns
-shared-directory test isolation, so this image does not serialize, retry, or skip
-those tests.
+handler inherited by Docker from exceeding the test's one-second target timeout.
+The complete `mise run rust:test` and `mise run check` use normal Cargo test
+parallelism; tests create and remove only their own temporary artifacts, without
+serialization, retries, or skips.
 
 For development, mount the checkout and a pre-created writable work directory. Run
 the preparation task after mounting because the mount hides the target baked into
@@ -198,7 +200,7 @@ ctx.regex("TAG","[a-z]+")
 To test your grammars you can use the generator:
 
 ```
-$ cargo run --bin generator -- -g grammars/grammar_py_exmaple.py -t 100 
+$ cargo run --bin generator -- -g grammars/grammar_py_example.py -t 100 -n 100
 <document><some_tag foo=bar><other_tag foo=bar><other_tag foo=bar><some_tag foo=bar></some_tag></other_tag><some_tag foo=bar><other_tag foo=bar></other_tag></some_tag><other_tag foo=bar></other_tag><some_tag foo=bar></some_tag></other_tag><other_tag foo=bar></other_tag><some_tag foo=bar></some_tag></some_tag></document>
 ```
 
