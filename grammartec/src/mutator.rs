@@ -299,13 +299,14 @@ impl Mutator {
 
 #[cfg(test)]
 mod tests {
-    use crate::chunkstore::ChunkStore;
+    use crate::chunkstore::{ChunkStore, TestDir};
     use crate::context::Context;
     use crate::mutator::Mutator;
     use crate::newtypes::RuleID;
     use crate::rule::RuleIDOrCustom;
     use crate::tree::{Tree, TreeLike, TreeMutation};
     use std::collections::HashSet;
+    use std::fs;
     use std::str;
 
     #[test]
@@ -493,8 +494,11 @@ mod tests {
 
     #[test]
     fn deterministic_splice() {
+        let work_dir = TestDir::new("deterministic-splice-test");
+        fs::create_dir_all(work_dir.path().join("outputs/chunks"))
+            .expect("could not create chunk output directory");
         let mut ctx = Context::new();
-        let mut cks = ChunkStore::new("/tmp/".to_string());
+        let mut cks = ChunkStore::new(work_dir.path().to_string_lossy().into_owned());
         let r1 = ctx.add_rule("A", b"a {A:a}");
         let _ = ctx.add_rule("A", b"b {A:a}");
         let r3 = ctx.add_rule("A", b"c {A:a}");

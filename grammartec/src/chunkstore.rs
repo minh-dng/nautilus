@@ -9,11 +9,52 @@ use std::io::Write;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 
+#[cfg(test)]
+use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use crate::context::Context;
 use crate::newtypes::{NTermID, NodeID, RuleID};
 use crate::rule::RuleIDOrCustom;
 use crate::tree::{Tree, TreeLike};
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+pub(crate) struct TestDir(PathBuf);
+
+#[cfg(test)]
+impl TestDir {
+    pub(crate) fn new(name: &str) -> Self {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+
+        loop {
+            let path = std::env::temp_dir().join(format!(
+                "nautilus-{name}-{}-{}",
+                std::process::id(),
+                NEXT_ID.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("could not create temporary directory {path:?}: {error}"),
+            }
+        }
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            eprintln!("could not remove temporary directory {:?}: {error}", self.0);
+        }
+    }
+}
 
 pub struct ChunkStoreWrapper {
     pub chunkstore: RwLock<ChunkStore>,
@@ -104,7 +145,7 @@ impl ChunkStore {
 
 #[cfg(test)]
 mod tests {
-    use crate::chunkstore::ChunkStore;
+    use crate::chunkstore::{ChunkStore, TestDir};
     use crate::context::Context;
     use crate::tree::TreeLike;
     use std::fs;
@@ -119,8 +160,10 @@ mod tests {
         let random_size = ctx.get_random_len_for_ruleid(&r1);
         println!("random_size: {}", random_size);
         let tree = ctx.generate_tree_from_rule(r1, random_size);
-        fs::create_dir_all("/tmp/outputs/chunks").expect("40234068");
-        let mut cks = ChunkStore::new("/tmp/".to_string());
+        let work_dir = TestDir::new("chunk-store-test");
+        fs::create_dir_all(work_dir.path().join("outputs/chunks"))
+            .expect("could not create chunk output directory");
+        let mut cks = ChunkStore::new(work_dir.path().to_string_lossy().into_owned());
         cks.add_tree(tree, &ctx);
         // assert!(cks.seen_outputs.contains("a b c".as_bytes()));
         // assert!(cks.seen_outputs.contains("b c".as_bytes()));
